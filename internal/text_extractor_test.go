@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -90,6 +91,17 @@ func TestExtractTextFromBubble(t *testing.T) {
 			want:    "[Message with no extractable text content]",
 			wantErr: false,
 		},
+		{
+			name: "rich text with fallback extraction",
+			bubble: &RawBubble{
+				Text:       "",
+				RichText:   `{"invalid": json}`,
+				CodeBlocks: []CodeBlock{},
+			},
+			// Should use fallback extraction
+			want:    "[Message with no extractable text content]",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -101,6 +113,121 @@ func TestExtractTextFromBubble(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ExtractTextFromBubble() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractFallbackText(t *testing.T) {
+	tests := []struct {
+		name    string
+		jsonStr string
+		want    string
+	}{
+		{
+			name:    "simple text field",
+			jsonStr: `{"text": "Hello world"}`,
+			want:    "Hello world ",
+		},
+		{
+			name:    "multiple text fields",
+			jsonStr: `{"text": "First", "other": "ignored", "text": "Second"}`,
+			want:    "First Second ",
+		},
+		{
+			name:    "escaped quotes",
+			jsonStr: `{"text": "Hello \"world\""}`,
+			// The function doesn't unescape, so it extracts the raw string including escapes
+			want:    "Hello \\\"world\\\" ",
+		},
+		{
+			name:    "no text field",
+			jsonStr: `{"other": "value"}`,
+			want:    "",
+		},
+		{
+			name:    "empty string",
+			jsonStr: "",
+			want:    "",
+		},
+		{
+			name:    "text with spaces around colon",
+			jsonStr: `{"text" : "value"}`,
+			want:    "value ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractFallbackText(tt.jsonStr)
+			// Trim space for comparison since the function adds trailing space
+			got = strings.TrimSpace(got)
+			want := strings.TrimSpace(tt.want)
+			if got != want {
+				t.Errorf("extractFallbackText() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestExtractFromRawJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		jsonStr string
+		want    string
+	}{
+		{
+			name:    "content field",
+			jsonStr: `{"content": "Hello world"}`,
+			want:    "Hello world",
+		},
+		{
+			name:    "value field",
+			jsonStr: `{"value": "This is a longer test value that exceeds minimum length"}`,
+			want:    "This is a longer test value that exceeds minimum length",
+		},
+		{
+			name:    "message field",
+			jsonStr: `{"message": "Test message"}`,
+			want:    "Test message",
+		},
+		{
+			name:    "thinking field",
+			jsonStr: `{"thinking": "Some thinking text"}`,
+			want:    "Some thinking text",
+		},
+		{
+			name:    "multiple fields",
+			jsonStr: `{"content": "First content here", "value": "Second value here"}`,
+			want:    "First content here\nSecond value here",
+		},
+		{
+			name:    "escaped characters",
+			jsonStr: `{"content": "Hello\\nWorld"}`,
+			want:    "Hello\nWorld",
+		},
+		{
+			name:    "short value (ignored)",
+			jsonStr: `{"content": "short"}`,
+			want:    "",
+		},
+		{
+			name:    "no matching fields",
+			jsonStr: `{"other": "value"}`,
+			want:    "",
+		},
+		{
+			name:    "empty string",
+			jsonStr: "",
+			want:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractFromRawJSON(tt.jsonStr)
+			if got != tt.want {
+				t.Errorf("extractFromRawJSON() = %q, want %q", got, tt.want)
 			}
 		})
 	}

@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 )
@@ -118,4 +119,36 @@ func TestProgressStep(t *testing.T) {
 	if err != nil {
 		t.Errorf("ProgressStep.Fn() error = %v, want nil", err)
 	}
+}
+
+func TestGumAvailable(t *testing.T) {
+	// This test just verifies the function doesn't panic
+	_ = gumAvailable()
+}
+
+func TestIsTerminal(t *testing.T) {
+	// Test with os.Stderr (should be a terminal in most test environments)
+	result := isTerminal(os.Stderr)
+	// We can't assert a specific value since it depends on the test environment
+	_ = result
+}
+
+func TestPrintSuccess(t *testing.T) {
+	// Test that PrintSuccess doesn't panic
+	PrintSuccess("Test success message")
+}
+
+func TestPrintError(t *testing.T) {
+	// Test that PrintError doesn't panic
+	PrintError("Test error message")
+}
+
+func TestPrintInfo(t *testing.T) {
+	// Test that PrintInfo doesn't panic
+	PrintInfo("Test info message")
+}
+
+func TestPrintWarning(t *testing.T) {
+	// Test that PrintWarning doesn't panic
+	PrintWarning("Test warning message")
 }
