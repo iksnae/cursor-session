@@ -1,4 +1,4 @@
-# Cursor Session Export CLI
+# Cursor Session
 
 A command-line tool to extract and export chat sessions from **Cursor IDE**. Extract your conversation history from Cursor's Composer and chat interface, export it in multiple formats, and keep your AI-assisted coding sessions organized.
 
