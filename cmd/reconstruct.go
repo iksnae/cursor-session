@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,17 +39,27 @@ var reconstructCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		// Load data asynchronously
 		storage := internal.NewStorage(db)
-		bubbleChan, composerChan, contextChan, err := internal.LoadDataAsync(storage)
-		if err != nil {
-			return fmt.Errorf("failed to load data: %w", err)
-		}
+		var conversations []*internal.ReconstructedConversation
 
-		// Reconstruct conversations
-		conversations, err := internal.ReconstructAsync(bubbleChan, composerChan, contextChan)
+		// Load data asynchronously with progress
+		ctx := context.Background()
+		err = internal.ShowProgress(ctx, "Loading data from database", func() error {
+			var loadErr error
+			bubbleChan, composerChan, contextChan, loadErr := internal.LoadDataAsync(storage)
+			if loadErr != nil {
+				return fmt.Errorf("failed to load data: %w", loadErr)
+			}
+
+			// Reconstruct conversations
+			conversations, loadErr = internal.ReconstructAsync(bubbleChan, composerChan, contextChan)
+			if loadErr != nil {
+				return fmt.Errorf("failed to reconstruct conversations: %w", loadErr)
+			}
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("failed to reconstruct conversations: %w", err)
+			return err
 		}
 
 		// Ensure output directory exists
@@ -56,27 +67,31 @@ var reconstructCmd = &cobra.Command{
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
-		// Save intermediary format
-		internal.LogInfo("Saving %d conversation(s) to intermediary format", len(conversations))
-		for i, conv := range conversations {
-			filename := fmt.Sprintf("conversation_%s.json", conv.ComposerID)
-			filepath := filepath.Join(reconstructOutput, filename)
+		// Save intermediary format with progress
+		saveCtx := context.Background()
+		err = internal.ShowProgress(saveCtx, fmt.Sprintf("Saving %d conversation(s) to intermediary format", len(conversations)), func() error {
+			for _, conv := range conversations {
+				filename := fmt.Sprintf("conversation_%s.json", conv.ComposerID)
+				filepath := filepath.Join(reconstructOutput, filename)
 
-			data, err := json.MarshalIndent(conv, "", "  ")
-			if err != nil {
-				internal.LogError("Failed to marshal conversation %s: %v", conv.ComposerID, err)
-				continue
+				data, err := json.MarshalIndent(conv, "", "  ")
+				if err != nil {
+					internal.LogError("Failed to marshal conversation %s: %v", conv.ComposerID, err)
+					continue
+				}
+
+				if err := os.WriteFile(filepath, data, 0644); err != nil {
+					internal.LogError("Failed to write file %s: %v", filepath, err)
+					continue
+				}
 			}
-
-			if err := os.WriteFile(filepath, data, 0644); err != nil {
-				internal.LogError("Failed to write file %s: %v", filepath, err)
-				continue
-			}
-
-			internal.LogInfo("Saved conversation %d/%d: %s", i+1, len(conversations), filepath)
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 
-		internal.LogInfo("Reconstruction complete: %d conversation(s) saved", len(conversations))
+		internal.PrintSuccess(fmt.Sprintf("Reconstruction complete: %d conversation(s) saved to %s", len(conversations), reconstructOutput))
 		return nil
 	},
 }

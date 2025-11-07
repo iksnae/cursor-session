@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,22 +35,23 @@ This command will:
 			currentBinary = realPath
 		}
 
-		internal.LogInfo("Current binary location: %s", currentBinary)
-
 		// Try to find the repository
 		repoPath, err := findRepository()
 		if err != nil {
-			return fmt.Errorf("failed to find repository: %w\n\n"+
-				"If you installed via 'go install', you can upgrade by running:\n"+
-				"  go install github.com/iksnae/cursor-session@main\n\n"+
-				"Or if you cloned the repo, make sure you're in the repository directory.", err)
+			helpMsg := "If you installed via 'go install', you can upgrade by running:\n" +
+				"  go install github.com/iksnae/cursor-session@main\n\n" +
+				"Or if you cloned the repo, make sure you're in the repository directory"
+			return fmt.Errorf("failed to find repository: %w\n\n%s", err, helpMsg)
 		}
-
-		internal.LogInfo("Found repository at: %s", repoPath)
 
 		// Check if git is available
 		if _, err := exec.LookPath("git"); err != nil {
 			return fmt.Errorf("git is not installed or not in PATH")
+		}
+
+		// Check if Go is available
+		if _, err := exec.LookPath("go"); err != nil {
+			return fmt.Errorf("go is not installed or not in PATH")
 		}
 
 		// Change to repository directory
@@ -68,73 +70,88 @@ This command will:
 			return fmt.Errorf("not a git repository: %s", repoPath)
 		}
 
+		ctx := context.Background()
+		steps := []internal.ProgressStep{}
+
 		// Check if there's a remote configured
 		remotes, err := exec.Command("git", "remote").Output()
-		if err != nil || len(remotes) == 0 {
-			internal.LogWarn("No git remote configured. Skipping pull.")
-		} else {
-			// Pull latest changes
-			internal.LogInfo("Pulling latest changes from repository...")
-			pullCmd := exec.Command("git", "pull")
-			pullCmd.Stdout = os.Stdout
-			pullCmd.Stderr = os.Stderr
-			if err := pullCmd.Run(); err != nil {
-				return fmt.Errorf("failed to pull latest changes: %w", err)
-			}
+		if err == nil && len(remotes) > 0 {
+			steps = append(steps, internal.ProgressStep{
+				Message: "Pulling latest changes from repository",
+				Fn: func() error {
+					pullCmd := exec.Command("git", "pull")
+					pullCmd.Stdout = os.Stdout
+					pullCmd.Stderr = os.Stderr
+					if err := pullCmd.Run(); err != nil {
+						return fmt.Errorf("failed to pull latest changes: %w", err)
+					}
+					return nil
+				},
+			})
 		}
 
-		// Check if Go is available
-		if _, err := exec.LookPath("go"); err != nil {
-			return fmt.Errorf("go is not installed or not in PATH")
+		steps = append(steps,
+			internal.ProgressStep{
+				Message: "Building new binary",
+				Fn: func() error {
+					buildCmd := exec.Command("go", "build", "-buildvcs=false", "-o", "cursor-session", ".")
+					buildCmd.Stdout = os.Stdout
+					buildCmd.Stderr = os.Stderr
+					if err := buildCmd.Run(); err != nil {
+						return fmt.Errorf("failed to build binary: %w", err)
+					}
+
+					// Check if the build was successful
+					if _, err := os.Stat("cursor-session"); err != nil {
+						return fmt.Errorf("binary was not created after build")
+					}
+					return nil
+				},
+			},
+			internal.ProgressStep{
+				Message: fmt.Sprintf("Installing to %s", currentBinary),
+				Fn: func() error {
+					// Make sure the target directory exists
+					targetDir := filepath.Dir(currentBinary)
+					if err := os.MkdirAll(targetDir, 0755); err != nil {
+						return fmt.Errorf("failed to create target directory: %w", err)
+					}
+
+					// Copy the new binary
+					newBinaryPath := filepath.Join(repoPath, "cursor-session")
+					if err := copyFile(newBinaryPath, currentBinary); err != nil {
+						return fmt.Errorf("failed to install binary: %w", err)
+					}
+
+					// Make it executable
+					if err := os.Chmod(currentBinary, 0755); err != nil {
+						return fmt.Errorf("failed to make binary executable: %w", err)
+					}
+					return nil
+				},
+			},
+			internal.ProgressStep{
+				Message: "Verifying installation",
+				Fn: func() error {
+					verifyCmd := exec.Command(currentBinary, "--version")
+					output, err := verifyCmd.Output()
+					if err != nil {
+						internal.LogWarn("Installation completed but verification failed: %v", err)
+						return nil // Don't fail on verification
+					}
+					fmt.Println()
+					fmt.Println("New version:")
+					fmt.Print(string(output))
+					return nil
+				},
+			},
+		)
+
+		if err := internal.ShowProgressWithSteps(ctx, steps); err != nil {
+			return err
 		}
 
-		// Build the binary
-		internal.LogInfo("Building new binary...")
-		buildCmd := exec.Command("go", "build", "-buildvcs=false", "-o", "cursor-session", ".")
-		buildCmd.Stdout = os.Stdout
-		buildCmd.Stderr = os.Stderr
-		if err := buildCmd.Run(); err != nil {
-			return fmt.Errorf("failed to build binary: %w", err)
-		}
-
-		// Check if the build was successful
-		if _, err := os.Stat("cursor-session"); err != nil {
-			return fmt.Errorf("binary was not created after build")
-		}
-
-		// Install to the same location
-		internal.LogInfo("Installing to %s...", currentBinary)
-		
-		// Make sure the target directory exists
-		targetDir := filepath.Dir(currentBinary)
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			return fmt.Errorf("failed to create target directory: %w", err)
-		}
-
-		// Copy the new binary
-		newBinaryPath := filepath.Join(repoPath, "cursor-session")
-		if err := copyFile(newBinaryPath, currentBinary); err != nil {
-			return fmt.Errorf("failed to install binary: %w", err)
-		}
-
-		// Make it executable
-		if err := os.Chmod(currentBinary, 0755); err != nil {
-			return fmt.Errorf("failed to make binary executable: %w", err)
-		}
-
-		// Verify installation
-		internal.LogInfo("Verifying installation...")
-		verifyCmd := exec.Command(currentBinary, "--version")
-		output, err := verifyCmd.Output()
-		if err != nil {
-			internal.LogWarn("Installation completed but verification failed: %v", err)
-		} else {
-			internal.LogInfo("Upgrade successful!")
-			fmt.Println()
-			fmt.Println("New version:")
-			fmt.Print(string(output))
-		}
-
+		internal.PrintSuccess("Upgrade complete!")
 		return nil
 	},
 }

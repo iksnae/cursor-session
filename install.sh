@@ -9,9 +9,25 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Installing cursor-session CLI...${NC}"
+# Welcome message
+echo ""
+echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}${BOLD}║                                                          ║${NC}"
+echo -e "${CYAN}${BOLD}║${NC}  ${GREEN}${BOLD}Welcome to cursor-session CLI!${NC}${CYAN}${BOLD}                      ║${NC}"
+echo -e "${CYAN}${BOLD}║                                                          ║${NC}"
+echo -e "${CYAN}${BOLD}║${NC}  Extract and export your Cursor IDE chat sessions   ${CYAN}${BOLD}║${NC}"
+echo -e "${CYAN}${BOLD}║${NC}  in multiple formats (JSONL, Markdown, YAML, JSON) ${CYAN}${BOLD}║${NC}"
+echo -e "${CYAN}${BOLD}║                                                          ║${NC}"
+echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+echo -e "${GREEN}${BOLD}Installing cursor-session CLI...${NC}"
+echo ""
 
 # Check if Go is installed
 if ! command -v go &> /dev/null; then
@@ -90,14 +106,20 @@ fi
 # Verify installation
 echo ""
 if command -v cursor-session &> /dev/null; then
-    echo -e "${GREEN}✓ Installation complete!${NC}"
+    echo -e "${GREEN}${BOLD}✓ Installation complete!${NC}"
     echo ""
-    echo "You can now use 'cursor-session' from anywhere:"
-    echo "  cursor-session list"
-    echo "  cursor-session show <session-id>"
-    echo "  cursor-session export --format jsonl"
+    echo -e "${CYAN}${BOLD}Quick Start:${NC}"
     echo ""
+    echo -e "  ${YELLOW}cursor-session list${NC}              ${BLUE}# List all your chat sessions${NC}"
+    echo -e "  ${YELLOW}cursor-session show <id>${NC}          ${BLUE}# View a specific session${NC}"
+    echo -e "  ${YELLOW}cursor-session export --format md${NC} ${BLUE}# Export sessions as Markdown${NC}"
+    echo ""
+    echo -e "${CYAN}${BOLD}For more information:${NC}"
+    echo -e "  ${YELLOW}cursor-session --help${NC}            ${BLUE}# See all available commands${NC}"
+    echo ""
+    echo -e "${GREEN}Installed version:${NC}"
     cursor-session --version 2>/dev/null || true
+    echo ""
 else
     echo -e "${YELLOW}Installation complete, but cursor-session is not in current PATH.${NC}"
     echo -e "${YELLOW}Please run one of the following:${NC}"

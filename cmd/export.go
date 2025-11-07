@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -78,53 +79,76 @@ var exportCmd = &cobra.Command{
 			}
 			defer db.Close()
 
-			// Load data asynchronously
 			storage := internal.NewStorage(db)
-			bubbleChan, composerChan, contextChan, err := internal.LoadDataAsync(storage)
-			if err != nil {
-				return fmt.Errorf("failed to load data: %w", err)
+			var conversations []*internal.ReconstructedConversation
+
+			ctx := context.Background()
+			steps := []internal.ProgressStep{
+				{
+					Message: "Loading data from database",
+					Fn: func() error {
+						var loadErr error
+						bubbleChan, composerChan, contextChan, loadErr := internal.LoadDataAsync(storage)
+						if loadErr != nil {
+							return fmt.Errorf("failed to load data: %w", loadErr)
+						}
+
+						// Reconstruct conversations
+						conversations, loadErr = internal.ReconstructAsync(bubbleChan, composerChan, contextChan)
+						if loadErr != nil {
+							return fmt.Errorf("failed to reconstruct conversations: %w", loadErr)
+						}
+						return nil
+					},
+				},
+				{
+					Message: "Processing and normalizing sessions",
+					Fn: func() error {
+						// Detect workspaces for association
+						workspaces, _ := internal.DetectWorkspaces(paths.BasePath)
+
+						// Load contexts for workspace association
+						var contexts map[string][]*internal.MessageContext
+						contexts, _ = storage.LoadMessageContexts()
+
+						// Normalize with workspace association
+						normalizer := internal.NewNormalizer()
+						sessions = make([]*internal.Session, 0, len(conversations))
+						for _, conv := range conversations {
+							// Try to associate with workspace
+							assignedWorkspace := workspace
+							if assignedWorkspace == "" {
+								assignedWorkspace = internal.AssociateComposerWithWorkspace(conv.ComposerID, contexts[conv.ComposerID], workspaces)
+							}
+
+							session, err := normalizer.NormalizeConversation(conv, assignedWorkspace)
+							if err != nil {
+								internal.LogWarn("Failed to normalize conversation %s: %v", conv.ComposerID, err)
+								continue
+							}
+							sessions = append(sessions, session)
+						}
+
+						// Deduplicate
+						deduplicator := internal.NewDeduplicator()
+						sessions = deduplicator.Deduplicate(sessions)
+						return nil
+					},
+				},
+				{
+					Message: "Caching sessions",
+					Fn: func() error {
+						// Save to cache
+						if err := cacheManager.SaveSessions(sessions, dbPath); err != nil {
+							internal.LogWarn("Failed to save cache: %v", err)
+						}
+						return nil
+					},
+				},
 			}
 
-			// Reconstruct conversations
-			conversations, err := internal.ReconstructAsync(bubbleChan, composerChan, contextChan)
-			if err != nil {
-				return fmt.Errorf("failed to reconstruct conversations: %w", err)
-			}
-
-			// Detect workspaces for association
-			workspaces, _ := internal.DetectWorkspaces(paths.BasePath)
-
-			// Load contexts for workspace association
-			var contexts map[string][]*internal.MessageContext
-			contexts, _ = storage.LoadMessageContexts()
-
-			// Normalize with workspace association
-			normalizer := internal.NewNormalizer()
-			sessions = make([]*internal.Session, 0, len(conversations))
-			for _, conv := range conversations {
-				// Try to associate with workspace
-				assignedWorkspace := workspace
-				if assignedWorkspace == "" {
-					assignedWorkspace = internal.AssociateComposerWithWorkspace(conv.ComposerID, contexts[conv.ComposerID], workspaces)
-				}
-
-				session, err := normalizer.NormalizeConversation(conv, assignedWorkspace)
-				if err != nil {
-					internal.LogWarn("Failed to normalize conversation %s: %v", conv.ComposerID, err)
-					continue
-				}
-				sessions = append(sessions, session)
-			}
-
-			// Deduplicate
-			deduplicator := internal.NewDeduplicator()
-			sessions = deduplicator.Deduplicate(sessions)
-
-			// Save to cache
-			if err := cacheManager.SaveSessions(sessions, dbPath); err != nil {
-				internal.LogWarn("Failed to save cache: %v", err)
-			} else {
-				internal.LogInfo("Cached %d session(s)", len(sessions))
+			if err := internal.ShowProgressWithSteps(ctx, steps); err != nil {
+				return err
 			}
 		}
 
@@ -150,29 +174,34 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
-		// Export sessions
-		internal.LogInfo("Exporting %d session(s) to %s", len(sessions), outputDir)
-		for i, session := range sessions {
-			filename := fmt.Sprintf("session_%s.%s", session.ID, exporter.Extension())
-			filepath := filepath.Join(outputDir, filename)
+		// Export sessions with progress
+		ctx := context.Background()
+		err = internal.ShowProgress(ctx, fmt.Sprintf("Exporting %d session(s) to %s", len(sessions), outputDir), func() error {
+			for _, session := range sessions {
+				filename := fmt.Sprintf("session_%s.%s", session.ID, exporter.Extension())
+				filepath := filepath.Join(outputDir, filename)
 
-			file, err := os.Create(filepath)
-			if err != nil {
-				internal.LogError("Failed to create file %s: %v", filepath, err)
-				continue
-			}
+				file, err := os.Create(filepath)
+				if err != nil {
+					internal.LogError("Failed to create file %s: %v", filepath, err)
+					continue
+				}
 
-			if err := exporter.Export(session, file); err != nil {
+				if err := exporter.Export(session, file); err != nil {
+					file.Close()
+					internal.LogError("Failed to export session %s: %v", session.ID, err)
+					continue
+				}
+
 				file.Close()
-				internal.LogError("Failed to export session %s: %v", session.ID, err)
-				continue
 			}
-
-			file.Close()
-			internal.LogInfo("Exported session %d/%d: %s", i+1, len(sessions), filepath)
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 
-		internal.LogInfo("Export complete: %d session(s) exported", len(sessions))
+		internal.PrintSuccess(fmt.Sprintf("Export complete: %d session(s) exported to %s", len(sessions), outputDir))
 		return nil
 	},
 }

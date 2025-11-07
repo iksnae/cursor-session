@@ -18,11 +18,26 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cursor-session",
-	Short: "Export Cursor Editor chat sessions",
-	Long: `A CLI tool to extract and export chat sessions from Cursor Editor.
+	Short: "Extract and export Cursor IDE chat sessions",
+	Long: `A powerful CLI tool to extract and export chat sessions from Cursor IDE.
 
 This tool extracts chat sessions from Cursor's modern globalStorage format
-and exports them in various formats (JSONL, Markdown, YAML, JSON).`,
+and exports them in various formats (JSONL, Markdown, YAML, JSON).
+
+Features:
+  • List all your chat sessions with metadata
+  • View individual conversations with full context
+  • Export in multiple formats (JSONL, Markdown, YAML, JSON)
+  • Workspace-aware session organization
+  • Intelligent caching for fast access
+  • Rich content extraction (code blocks, tool calls, context)
+
+Quick Start:
+  cursor-session list                    # List all sessions
+  cursor-session show <session-id>        # View a specific session
+  cursor-session export --format md      # Export as Markdown
+
+For detailed usage, see: https://github.com/iksnae/cursor-session`,
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		internal.SetVerbose(verbose)
