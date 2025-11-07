@@ -36,6 +36,8 @@ Thumbs.db
 
 # Test exports
 test-exports/
+cmd/exports/
+cmd/intermediary/
 
 # Build artifacts
 dist/
