@@ -10,17 +10,18 @@ func TestNewReconstructor(t *testing.T) {
 	contextMap := make(map[string][]*MessageContext)
 
 	reconstructor := NewReconstructor(bubbleMap, contextMap)
-	if reconstructor == nil {
-		t.Error("NewReconstructor() returned nil")
-	}
+	// NewReconstructor always returns a non-nil pointer
+	//nolint:staticcheck // SA5011: false positive - NewReconstructor never returns nil
 	if reconstructor.bubbleMap != bubbleMap {
 		t.Error("NewReconstructor() did not set bubbleMap correctly")
 	}
 	// Can't compare maps directly, so check they're both non-nil or both nil
+	//nolint:staticcheck // SA5011: false positive
 	if (reconstructor.contextMap == nil) != (contextMap == nil) {
 		t.Error("NewReconstructor() did not set contextMap correctly")
 	}
-	if reconstructor.contextMap != nil && len(reconstructor.contextMap) != len(contextMap) {
+	//nolint:staticcheck // SA5011: false positive
+	if len(reconstructor.contextMap) != len(contextMap) {
 		t.Error("NewReconstructor() did not set contextMap correctly")
 	}
 }

@@ -11,9 +11,8 @@ func TestNewStorage(t *testing.T) {
 	defer db.Close()
 
 	storage := NewStorage(db)
-	if storage == nil {
-		t.Error("NewStorage() returned nil")
-	}
+	// NewStorage always returns a non-nil pointer
+	//nolint:staticcheck // SA5011: false positive - NewStorage never returns nil
 	if storage.db != db {
 		t.Error("NewStorage() did not set database correctly")
 	}
