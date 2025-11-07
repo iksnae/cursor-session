@@ -142,7 +142,7 @@ func displaySessionsFromComposers(composers []*internal.RawComposer) {
 	for _, composer := range composers {
 		name := composer.Name
 		if name == "" {
-			name = fmt.Sprintf("Untitled")
+			name = "Untitled"
 		}
 
 		// Truncate long names but keep them readable
