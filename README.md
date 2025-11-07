@@ -36,8 +36,10 @@ The script automatically builds, installs, and configures the tool. **No manual 
 **Using Go:**
 
 ```bash
-go install github.com/iksnae/cursor-session@latest
+go install github.com/iksnae/cursor-session@main
 ```
+
+Note: Use `@main` for the latest development version, or `@latest` once a release tag is created.
 
 **Using Make:**
 

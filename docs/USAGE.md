@@ -79,7 +79,7 @@ Upgrades cursor-session to the latest version by pulling latest changes, rebuild
 
 **Note**: This command works if you installed from a cloned repository. If you installed via `go install`, use:
 ```bash
-go install github.com/iksnae/cursor-session@latest
+go install github.com/iksnae/cursor-session@main
 ```
 
 ## Export Formats

@@ -41,7 +41,7 @@ This command will:
 		if err != nil {
 			return fmt.Errorf("failed to find repository: %w\n\n"+
 				"If you installed via 'go install', you can upgrade by running:\n"+
-				"  go install github.com/iksnae/cursor-session@latest\n\n"+
+				"  go install github.com/iksnae/cursor-session@main\n\n"+
 				"Or if you cloned the repo, make sure you're in the repository directory.", err)
 		}
 
