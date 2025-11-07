@@ -1,0 +1,34 @@
+codecov:
+  require_ci_to_pass: yes
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+  
+  # Exclude packages that don't need coverage
+  ignore:
+    - "cmd/**"           # CLI commands - typically not unit tested
+    - "main.go"          # Main entry point - not unit tested
+    - "testutil/**"      # Test utilities - not tested themselves
+    - "**/*_test.go"     # Test files themselves
+  
+  # Only report on packages we actually test
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%
+        base: auto
+        branches:
+          - main
+    patch:
+      default:
+        target: 80%
+        threshold: 1%
+
+comment:
+  layout: "reach,diff,flags,tree,reach"
+  behavior: default
+  require_changes: no
+
