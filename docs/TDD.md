@@ -2,8 +2,6 @@
 
 ### Project: Cursor Session Export CLI
 
-### Language: Go (v1.22+)
-
 ### Author: K
 
 ### Date: November 2025

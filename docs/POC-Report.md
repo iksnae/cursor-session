@@ -2,8 +2,6 @@
 
 ### Project: Cursor Chat Export CLI
 
-### Language: Go (v1.22+)
-
 ### Author: K
 
 ### Date: November 2025
@@ -14,7 +12,7 @@
 
 This Proof of Concept (POC) explores how to **collect, parse, and export chat session data** from the **Cursor Editor**, which stores user interactions and AI chat data in both **SQLite** and **CacheStorage** formats.
 
-The goal is to develop a **cross-platform Go CLI** capable of:
+The goal is to develop a **cross-platform CLI** capable of:
 
 - Discovering and parsing Cursor chat history on **macOS** and **Linux**.
 - Exporting structured session logs to **JSONL** or **Markdown** formats.

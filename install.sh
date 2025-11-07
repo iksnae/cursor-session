@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Installation script for cursor-session CLI
-# Supports macOS (zsh) and Ubuntu (bash/zsh)
+# Supports macOS (zsh) and Linux (bash/zsh)
 
 set -e
 
