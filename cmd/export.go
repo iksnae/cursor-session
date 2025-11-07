@@ -178,6 +178,10 @@ var exportCmd = &cobra.Command{
 		ctx := context.Background()
 		err = internal.ShowProgress(ctx, fmt.Sprintf("Exporting %d session(s) to %s", len(sessions), outputDir), func() error {
 			for _, session := range sessions {
+				if session == nil {
+					internal.LogWarn("Skipping nil session")
+					continue
+				}
 				filename := fmt.Sprintf("session_%s.%s", session.ID, exporter.Extension())
 				filepath := filepath.Join(outputDir, filename)
 

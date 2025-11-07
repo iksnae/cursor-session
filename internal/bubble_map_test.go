@@ -8,10 +8,10 @@ import (
 func TestNewBubbleMap(t *testing.T) {
 	bm := NewBubbleMap()
 	if bm == nil {
-		t.Error("NewBubbleMap() returned nil")
+		t.Fatal("NewBubbleMap() returned nil")
 	}
 	if bm.bubbles == nil {
-		t.Error("NewBubbleMap() bubbles map is nil")
+		t.Fatal("NewBubbleMap() bubbles map is nil")
 	}
 }
 
@@ -86,7 +86,7 @@ func TestBuildBubbleMapFromChannel(t *testing.T) {
 	bm := BuildBubbleMapFromChannel(bubbleChan)
 
 	if bm == nil {
-		t.Error("BuildBubbleMapFromChannel() returned nil")
+		t.Fatal("BuildBubbleMapFromChannel() returned nil")
 	}
 
 	// Verify all bubbles are in the map
@@ -128,7 +128,7 @@ func TestBuildBubbleMapFromChannel_EmptyChannel(t *testing.T) {
 	bm := BuildBubbleMapFromChannel(bubbleChan)
 
 	if bm == nil {
-		t.Error("BuildBubbleMapFromChannel() returned nil for empty channel")
+		t.Fatal("BuildBubbleMapFromChannel() returned nil for empty channel")
 	}
 
 	if len(bm.bubbles) != 0 {

@@ -10,11 +10,11 @@ on:
 
 jobs:
   test:
-    name: Test and Lint
+    name: Test, Lint, and Coverage
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.23']
+        go-version: ['1.22', '1.23']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,6 +39,18 @@ jobs:
 
       - name: Run tests
         run: go test ./... -v
+
+      - name: Run tests with coverage
+        run: go test ./... -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-${{ matrix.go-version }}
+          fail_ci_if_error: false
 
   build:
     name: Build Validation
@@ -83,4 +95,3 @@ jobs:
         run: |
           file cursor-session || file cursor-session.exe || true
           ./cursor-session --version || ./cursor-session.exe --version || true
-

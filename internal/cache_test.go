@@ -13,7 +13,7 @@ func TestNewCacheManager(t *testing.T) {
 	cacheDir := testutil.CreateTempDir(t)
 	cm := NewCacheManager(cacheDir)
 	if cm == nil {
-		t.Error("NewCacheManager() returned nil")
+		t.Fatal("NewCacheManager() returned nil")
 	}
 	if cm.cacheDir != cacheDir {
 		t.Errorf("NewCacheManager() cacheDir = %q, want %q", cm.cacheDir, cacheDir)
