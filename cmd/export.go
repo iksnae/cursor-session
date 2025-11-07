@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/k/cursor-session/internal"
-	"github.com/k/cursor-session/internal/export"
+	"github.com/iksnae/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal/export"
 	"github.com/spf13/cobra"
 )
 

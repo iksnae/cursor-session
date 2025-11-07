@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/k/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal"
 )
 
 // JSONExporter exports sessions in JSON format (pretty-printed)

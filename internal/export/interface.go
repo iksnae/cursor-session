@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/k/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal"
 )
 
 // Exporter defines the interface for all export formats

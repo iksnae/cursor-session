@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/k/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal"
 )
 
 // JSONLExporter exports sessions in JSONL format (one message per line)

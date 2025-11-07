@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/k/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal"
 	"github.com/spf13/cobra"
 )
 

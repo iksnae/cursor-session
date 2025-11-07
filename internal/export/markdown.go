@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/k/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal"
 )
 
 // MarkdownExporter exports sessions in Markdown format

@@ -3,7 +3,7 @@ package export
 import (
 	"io"
 
-	"github.com/k/cursor-session/internal"
+	"github.com/iksnae/cursor-session/internal"
 	"gopkg.in/yaml.v3"
 )
 

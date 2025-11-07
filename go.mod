@@ -1,4 +1,4 @@
-module github.com/k/cursor-session
+module github.com/iksnae/cursor-session
 
 go 1.22
 
