@@ -1,6 +1,10 @@
-![cursor session](./images/simple-icon.png)
-
+<<<<<<< HEAD
 # Cursor Session
+=======
+![cursor-session](./images/simple-icon.png)
+
+# Cursor Session Export CLI
+>>>>>>> a50fbdb (added simple icon)
 
 A command-line tool to extract and export chat sessions from **Cursor IDE**. Extract your conversation history from Cursor's Composer and chat interface, export it in multiple formats, and keep your AI-assisted coding sessions organized.
 
