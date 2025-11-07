@@ -147,6 +147,22 @@ cursor-session reconstruct
 
 Reconstructs conversations and saves to intermediary JSON format for debugging.
 
+### Upgrade
+
+```bash
+cursor-session upgrade
+```
+
+Upgrades cursor-session to the latest version by:
+1. Pulling latest changes from the repository
+2. Rebuilding the binary
+3. Reinstalling to the current installation location
+
+**Note**: This command works if you installed from a cloned repository. If you installed via `go install`, use:
+```bash
+go install github.com/k/cursor-session@latest
+```
+
 ## Supported Formats
 
 - **JSONL**: One message per line, machine-readable
@@ -167,6 +183,7 @@ The tool uses a multi-step process:
 ### Caching
 
 The tool uses an intelligent caching system:
+
 - **Cache Location**: `~/.cursor-session-cache/`
 - **Index File**: `sessions.yaml` - Contains session metadata
 - **Session Files**: `session_<id>.json` - Individual session data
@@ -176,6 +193,7 @@ The tool uses an intelligent caching system:
 ### Text Extraction
 
 The tool uses a three-tier text extraction strategy:
+
 1. **Primary**: Use `bubble.text` if available
 2. **Fallback**: Parse `bubble.richText` JSON structure (including thinking/tool calls)
 3. **Enhancement**: Append code blocks from `bubble.codeBlocks[]`
