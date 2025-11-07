@@ -18,86 +18,39 @@ Works with Cursor IDE's modern storage format (globalStorage) to extract convers
 
 ## Installation
 
-### Download Pre-built Binary (Recommended - No Go Required)
+### Quick Install (Recommended - One Command)
 
-The easiest way to install cursor-session is to download a pre-built binary from the [Releases](https://github.com/iksnae/cursor-session/releases) page.
+Install cursor-session with a single command. The installer automatically detects your platform and downloads the correct binary:
 
-**For macOS (Intel):**
 ```bash
-# Download and extract (replace VERSION with actual version, e.g., 1.0.0)
-VERSION="1.0.0"  # or visit https://github.com/iksnae/cursor-session/releases for latest
-curl -L https://github.com/iksnae/cursor-session/releases/download/v${VERSION}/cursor-session-${VERSION}-darwin-amd64.tar.gz -o cursor-session.tar.gz
-tar -xzf cursor-session.tar.gz
-
-# Install to local bin directory
-mkdir -p ~/.local/bin
-mv cursor-session ~/.local/bin/
-chmod +x ~/.local/bin/cursor-session
-
-# Add to PATH (if not already there)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+curl -fsSL https://raw.githubusercontent.com/iksnae/cursor-session/main/install-binary.sh | bash
 ```
 
-**For macOS (Apple Silicon / M1/M2/M3):**
+That's it! The script will:
+- Detect your OS and architecture (macOS Intel/ARM, Linux amd64/arm64)
+- Download the latest pre-built binary
+- Install to `~/.local/bin`
+- Add to your PATH automatically
+
+**Verify installation:**
 ```bash
-# Download and extract (replace VERSION with actual version, e.g., 1.0.0)
-VERSION="1.0.0"  # or visit https://github.com/iksnae/cursor-session/releases for latest
-curl -L https://github.com/iksnae/cursor-session/releases/download/v${VERSION}/cursor-session-${VERSION}-darwin-arm64.tar.gz -o cursor-session.tar.gz
-tar -xzf cursor-session.tar.gz
-
-# Install to local bin directory
-mkdir -p ~/.local/bin
-mv cursor-session ~/.local/bin/
-chmod +x ~/.local/bin/cursor-session
-
-# Add to PATH (if not already there)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+cursor-session --version
 ```
 
-**For Linux (x86_64):**
-```bash
-# Download and extract (replace VERSION with actual version, e.g., 1.0.0)
-VERSION="1.0.0"  # or visit https://github.com/iksnae/cursor-session/releases for latest
-curl -L https://github.com/iksnae/cursor-session/releases/download/v${VERSION}/cursor-session-${VERSION}-linux-amd64.tar.gz -o cursor-session.tar.gz
-tar -xzf cursor-session.tar.gz
+### Manual Binary Download
 
-# Install to local bin directory
-mkdir -p ~/.local/bin
+If you prefer to download manually, visit the [Releases](https://github.com/iksnae/cursor-session/releases) page and download the appropriate binary for your platform:
+
+- **macOS (Intel)**: `cursor-session-*-darwin-amd64.tar.gz`
+- **macOS (Apple Silicon)**: `cursor-session-*-darwin-arm64.tar.gz`
+- **Linux (x86_64)**: `cursor-session-*-linux-amd64.tar.gz`
+- **Linux (ARM64)**: `cursor-session-*-linux-arm64.tar.gz`
+
+Extract and move to your PATH:
+```bash
+tar -xzf cursor-session-*.tar.gz
 mv cursor-session ~/.local/bin/
 chmod +x ~/.local/bin/cursor-session
-
-# Add to PATH (if not already there)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
-source ~/.bashrc  # or source ~/.zshrc
-```
-
-**For Linux (ARM64):**
-```bash
-# Download and extract (replace VERSION with actual version, e.g., 1.0.0)
-VERSION="1.0.0"  # or visit https://github.com/iksnae/cursor-session/releases for latest
-curl -L https://github.com/iksnae/cursor-session/releases/download/v${VERSION}/cursor-session-${VERSION}-linux-arm64.tar.gz -o cursor-session.tar.gz
-tar -xzf cursor-session.tar.gz
-
-# Install to local bin directory
-mkdir -p ~/.local/bin
-mv cursor-session ~/.local/bin/
-chmod +x ~/.local/bin/cursor-session
-
-# Add to PATH (if not already there)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
-source ~/.bashrc  # or source ~/.zshrc
-```
-
-**Verify the download:**
-```bash
-# Download checksums (replace VERSION with actual version)
-VERSION="1.0.0"
-curl -L https://github.com/iksnae/cursor-session/releases/download/v${VERSION}/checksums.txt -o checksums.txt
-
-# Verify your downloaded file (replace with your actual filename)
-sha256sum -c checksums.txt
 ```
 
 ### Quick Install from Source (For Developers)
