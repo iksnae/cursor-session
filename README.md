@@ -1,4 +1,5 @@
 ![cursor session](./images/simple-icon.png)
+[![codecov](https://codecov.io/gh/iksnae/cursor-session/branch/main/graph/badge.svg)](https://codecov.io/gh/iksnae/cursor-session)
 
 # Cursor Session
 

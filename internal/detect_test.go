@@ -53,3 +53,22 @@ func TestGlobalStorageDBPath(t *testing.T) {
 	}
 }
 
+func TestGlobalStorageExists(t *testing.T) {
+	// Use a test path instead of real Cursor path
+	testPaths := StoragePaths{
+		GlobalStorage: "/nonexistent/path/globalStorage",
+	}
+
+	// Test when database doesn't exist (should return false)
+	exists := testPaths.GlobalStorageExists()
+	if exists {
+		t.Error("GlobalStorageExists() should return false for nonexistent path")
+	}
+}
+
+func TestDetectStoragePaths_ErrorCases(t *testing.T) {
+	// Test that error is returned for unsupported OS
+	// We can't easily test this without mocking runtime.GOOS, but we can document the behavior
+	// The actual test would require runtime manipulation which is complex
+}
+

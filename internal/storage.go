@@ -44,7 +44,7 @@ func (s *Storage) LoadComposers() ([]*RawComposer, error) {
 		return nil, fmt.Errorf("failed to query composers: %w", err)
 	}
 
-	var composers []*RawComposer
+	composers := make([]*RawComposer, 0)
 	for _, pair := range pairs {
 		composer, err := ParseRawComposer(pair.Key, pair.Value)
 		if err != nil {
