@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: go.sum
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Get commit SHA
+        id: commit
+        run: |
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.commit.outputs.commit }}
+        run: |
+          mkdir -p dist
+          
+          for target in \
+            "darwin/amd64" \
+            "darwin/arm64" \
+            "linux/amd64" \
+            "linux/arm64"; do
+            os=$(echo $target | cut -d'/' -f1)
+            arch=$(echo $target | cut -d'/' -f2)
+            
+            echo "Building for $os/$arch..."
+            
+            GOOS=$os GOARCH=$arch go build -buildvcs=false \
+              -ldflags "-X 'github.com/iksnae/cursor-session/cmd.version=$VERSION' -X 'github.com/iksnae/cursor-session/cmd.commit=$COMMIT' -X 'github.com/iksnae/cursor-session/cmd.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
+              -o cursor-session \
+              .
+            
+            # Create archive
+            if [ "$os" = "darwin" ]; then
+              tar -czf "dist/cursor-session-${VERSION}-${os}-${arch}.tar.gz" cursor-session
+            else
+              tar -czf "dist/cursor-session-${VERSION}-${os}-${arch}.tar.gz" cursor-session
+            fi
+            
+            rm cursor-session
+          done
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+          cd ..
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release v${{ steps.version.outputs.version }}
+          body: |
+            ## Release v${{ steps.version.outputs.version }}
+            
+            ### Downloads
+            
+            Download the appropriate binary for your platform:
+            
+            - **macOS (Intel)**: `cursor-session-${{ steps.version.outputs.version }}-darwin-amd64.tar.gz`
+            - **macOS (Apple Silicon)**: `cursor-session-${{ steps.version.outputs.version }}-darwin-arm64.tar.gz`
+            - **Linux (x86_64)**: `cursor-session-${{ steps.version.outputs.version }}-linux-amd64.tar.gz`
+            - **Linux (ARM64)**: `cursor-session-${{ steps.version.outputs.version }}-linux-arm64.tar.gz`
+            
+            ### Installation
+            
+            1. Download the appropriate binary for your platform
+            2. Extract the archive: `tar -xzf cursor-session-*.tar.gz`
+            3. Move to your PATH: `mv cursor-session ~/.local/bin/` (or `/usr/local/bin/`)
+            4. Make executable: `chmod +x ~/.local/bin/cursor-session`
+            
+            ### Verify
+            
+            Verify the checksums:
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          draft: false
+          prerelease: false
+

@@ -2,6 +2,14 @@
 
 Complete guide to using the Cursor Session Export CLI for extracting chat sessions from Cursor IDE.
 
+## Installation
+
+For installation instructions, including downloading pre-built binaries, see the [main README](../README.md#installation).
+
+Quick options:
+- **Download pre-built binary** (recommended, no Go required) - See [Releases](https://github.com/iksnae/cursor-session/releases)
+- **Build from source** - Use `./install.sh` or `go install github.com/iksnae/cursor-session@latest`
+
 ## Commands
 
 ### List Sessions
@@ -77,10 +85,11 @@ cursor-session upgrade
 
 Upgrades cursor-session to the latest version by pulling latest changes, rebuilding, and reinstalling.
 
-**Note**: This command works if you installed from a cloned repository. If you installed via `go install`, use:
-```bash
-go install github.com/iksnae/cursor-session@main
-```
+**Note**: This command works if you installed from a cloned repository. 
+
+For other installation methods:
+- If you installed via `go install`, use: `go install github.com/iksnae/cursor-session@latest` (or `@main` for dev)
+- If you installed from a pre-built binary, download the latest release from the [Releases](https://github.com/iksnae/cursor-session/releases) page
 
 ## Export Formats
 
