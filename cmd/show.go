@@ -1,0 +1,359 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/k/cursor-session/internal"
+	"github.com/spf13/cobra"
+)
+
+var (
+	limit int
+	since string
+)
+
+var (
+	// Styles for show command
+	sessionHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("212")).
+				Padding(0, 1).
+				MarginBottom(1)
+
+	sessionMetaStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("243")).
+				MarginBottom(1)
+
+	messageDividerStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240")).
+				Margin(1, 0)
+
+	userMessageStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("39")).
+				Bold(true).
+				Padding(0, 1)
+
+	assistantMessageStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("135")).
+				Bold(true).
+				Padding(0, 1)
+
+	messageContentStyle = lipgloss.NewStyle().
+				Padding(0, 2).
+				MarginBottom(1)
+
+	timestampStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Italic(true)
+
+	messageBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("62")).
+			Padding(1, 2).
+			MarginBottom(1)
+)
+
+// showCmd represents the show command
+var showCmd = &cobra.Command{
+	Use:   "show <session-id>",
+	Short: "Show messages for a specific session",
+	Long:  `Display messages from a specific chat session.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		sessionID := args[0]
+
+		// Detect paths
+		paths, err := internal.DetectStoragePaths()
+		if err != nil {
+			return fmt.Errorf("failed to detect storage paths: %w", err)
+		}
+
+		// Check if globalStorage exists
+		if !paths.GlobalStorageExists() {
+			return fmt.Errorf("globalStorage not found at %s", paths.GetGlobalStorageDBPath())
+		}
+
+		// Initialize cache manager (always enabled)
+		// Store cache in user's home directory root
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("failed to get home directory: %w", err)
+		}
+		cacheDir := filepath.Join(homeDir, ".cursor-session-cache")
+		cacheManager := internal.NewCacheManager(cacheDir)
+		dbPath := paths.GetGlobalStorageDBPath()
+
+		var session *internal.Session
+
+		// Try to load from cache (even if cache is "invalid", individual sessions may still be valid)
+		// First check if cache is valid
+		valid, err := cacheManager.IsCacheValid(dbPath)
+		if err != nil {
+			internal.LogDebug("Cache validation error: %v", err)
+		} else if !valid {
+			internal.LogDebug("Cache is invalid or doesn't exist, but checking for individual session...")
+		} else {
+			internal.LogDebug("Cache is valid")
+		}
+
+		// Try to load index and find session (even if cache is invalid)
+		index, err := cacheManager.LoadIndex()
+		if err == nil && index != nil {
+			// Verify index is for the same database (path check)
+			if index.Metadata.DatabasePath == dbPath {
+				internal.LogDebug("Index loaded with %d sessions, searching for composer ID: %s", len(index.Sessions), sessionID)
+				// Find session by composer ID
+				for _, entry := range index.Sessions {
+					if entry.ComposerID == sessionID {
+						internal.LogDebug("Found matching entry, loading session: %s", entry.ID)
+						session, err = cacheManager.LoadSession(entry.ID)
+						if err == nil {
+							internal.LogInfo("Found session in cache")
+							break
+						} else {
+							internal.LogDebug("Failed to load session file: %v", err)
+						}
+					}
+				}
+			} else {
+				internal.LogDebug("Index is for different database path, ignoring")
+			}
+		} else {
+			internal.LogDebug("Failed to load index: %v", err)
+		}
+
+		// Load from database if not in cache
+		if session == nil {
+			internal.LogInfo("Session not in cache, reconstructing from database...")
+			// Open database
+			db, err := internal.OpenDatabase(dbPath)
+			if err != nil {
+				return fmt.Errorf("failed to open database: %w", err)
+			}
+			defer db.Close()
+
+			// Load data
+			storage := internal.NewStorage(db)
+			bubbles, err := storage.LoadBubbles()
+			if err != nil {
+				return fmt.Errorf("failed to load bubbles: %w", err)
+			}
+
+			composers, err := storage.LoadComposers()
+			if err != nil {
+				return fmt.Errorf("failed to load composers: %w", err)
+			}
+
+			contexts, err := storage.LoadMessageContexts()
+			if err != nil {
+				return fmt.Errorf("failed to load contexts: %w", err)
+			}
+
+			// Find the composer
+			var targetComposer *internal.RawComposer
+			for _, composer := range composers {
+				if composer.ComposerID == sessionID {
+					targetComposer = composer
+					break
+				}
+			}
+
+			if targetComposer == nil {
+				return fmt.Errorf("session not found: %s", sessionID)
+			}
+
+			// Reconstruct conversation
+			bubbleMap := internal.NewBubbleMap()
+			for _, bubble := range bubbles {
+				bubbleMap.Set(bubble.BubbleID, bubble)
+			}
+
+			reconstructor := internal.NewReconstructor(bubbleMap, contexts)
+			conv, err := reconstructor.ReconstructConversation(targetComposer)
+			if err != nil {
+				return fmt.Errorf("failed to reconstruct conversation: %w", err)
+			}
+
+			// Associate with workspace
+			workspaces, _ := internal.DetectWorkspaces(paths.BasePath)
+			assignedWorkspace := internal.AssociateComposerWithWorkspace(conv.ComposerID, contexts[conv.ComposerID], workspaces)
+
+			// Normalize
+			normalizer := internal.NewNormalizer()
+			session, err = normalizer.NormalizeConversation(conv, assignedWorkspace)
+			if err != nil {
+				return fmt.Errorf("failed to normalize conversation: %w", err)
+			}
+
+			// Save to cache for future use
+			if err := cacheManager.SaveSessionAndUpdateIndex(session, dbPath); err != nil {
+				internal.LogWarn("Failed to save session to cache: %v", err)
+			} else {
+				internal.LogInfo("Session cached for faster future access")
+			}
+		}
+
+		// Display session header
+		displaySessionHeader(session)
+
+		// Filter messages if needed
+		messagesToShow := session.Messages
+		var sinceTime *time.Time
+
+		// Filter by timestamp if --since is provided
+		if since != "" {
+			parsedTime, err := time.Parse(time.RFC3339, since)
+			if err != nil {
+				return fmt.Errorf("invalid --since timestamp format (expected RFC3339): %w", err)
+			}
+			sinceTime = &parsedTime
+			filtered := make([]internal.Message, 0, len(messagesToShow))
+			for _, msg := range messagesToShow {
+				if msg.Timestamp != "" {
+					if msgTime, err := time.Parse(time.RFC3339, msg.Timestamp); err == nil {
+						if msgTime.After(*sinceTime) || msgTime.Equal(*sinceTime) {
+							filtered = append(filtered, msg)
+						}
+					}
+				}
+			}
+			messagesToShow = filtered
+		}
+
+		// Apply limit if specified
+		totalFiltered := len(messagesToShow)
+		if limit > 0 && limit < len(messagesToShow) {
+			messagesToShow = messagesToShow[:limit]
+		}
+
+		// Display messages
+		for i, msg := range messagesToShow {
+			displayMessage(i+1, msg, totalFiltered)
+		}
+
+		// Show remaining count if limit was applied
+		if limit > 0 && limit < totalFiltered {
+			remaining := totalFiltered - limit
+			fmt.Println()
+			fmt.Println(lipgloss.NewStyle().
+				Foreground(lipgloss.Color("243")).
+				Italic(true).
+				Render(fmt.Sprintf("... (%d more message(s))", remaining)))
+		}
+
+		return nil
+	},
+}
+
+func displaySessionHeader(session *internal.Session) {
+	header := sessionHeaderStyle.Render(fmt.Sprintf("💬 %s", session.Metadata.Name))
+	fmt.Println(header)
+
+	// Create metadata line
+	var metaParts []string
+	if session.Metadata.CreatedAt != "" {
+		metaParts = append(metaParts, fmt.Sprintf("Created: %s", session.Metadata.CreatedAt))
+	}
+	metaParts = append(metaParts, fmt.Sprintf("Messages: %d", len(session.Messages)))
+	if session.Workspace != "" {
+		metaParts = append(metaParts, fmt.Sprintf("Workspace: %s", session.Workspace))
+	}
+
+	if len(metaParts) > 0 {
+		meta := sessionMetaStyle.Render(strings.Join(metaParts, " • "))
+		fmt.Println(meta)
+	}
+
+	fmt.Println()
+}
+
+func displayMessage(index int, msg internal.Message, total int) {
+	var actorStyle lipgloss.Style
+	var actorLabel string
+
+	switch msg.Actor {
+	case "user":
+		actorStyle = userMessageStyle
+		actorLabel = "👤 User"
+	case "assistant":
+		actorStyle = assistantMessageStyle
+		actorLabel = "🤖 Assistant"
+	default:
+		actorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("243"))
+		actorLabel = fmt.Sprintf("🔧 %s", msg.Actor)
+	}
+
+	// Message header
+	header := fmt.Sprintf("%s %s", actorStyle.Render(actorLabel), timestampStyle.Render(fmt.Sprintf("[%d/%d]", index, total)))
+	if msg.Timestamp != "" {
+		// Parse and format timestamp
+		if t, err := time.Parse(time.RFC3339, msg.Timestamp); err == nil {
+			header += " " + timestampStyle.Render(t.Format("15:04:05"))
+		} else {
+			header += " " + timestampStyle.Render(msg.Timestamp)
+		}
+	}
+
+	fmt.Println(header)
+
+	// Message content
+	content := strings.TrimSpace(msg.Content)
+	if content != "" {
+		// Wrap long lines
+		content = wrapText(content, 80)
+		fmt.Println(messageContentStyle.Render(content))
+	} else {
+		fmt.Println(messageContentStyle.Foreground(lipgloss.Color("240")).Render("(empty message)"))
+	}
+
+	fmt.Println()
+}
+
+func wrapText(text string, width int) string {
+	lines := strings.Split(text, "\n")
+	var wrapped []string
+
+	for _, line := range lines {
+		if len(line) <= width {
+			wrapped = append(wrapped, line)
+			continue
+		}
+
+		// Wrap long lines
+		words := strings.Fields(line)
+		currentLine := ""
+		for _, word := range words {
+			if len(currentLine)+len(word)+1 > width {
+				if currentLine != "" {
+					wrapped = append(wrapped, currentLine)
+					currentLine = word
+				} else {
+					wrapped = append(wrapped, word)
+					currentLine = ""
+				}
+			} else {
+				if currentLine == "" {
+					currentLine = word
+				} else {
+					currentLine += " " + word
+				}
+			}
+		}
+		if currentLine != "" {
+			wrapped = append(wrapped, currentLine)
+		}
+	}
+
+	return strings.Join(wrapped, "\n")
+}
+
+func init() {
+	rootCmd.AddCommand(showCmd)
+	showCmd.Flags().IntVarP(&limit, "limit", "n", 0, "Limit number of messages to show")
+	showCmd.Flags().StringVar(&since, "since", "", "Show messages since timestamp (ISO8601)")
+}
