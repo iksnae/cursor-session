@@ -41,7 +41,7 @@ This command will:
 			helpMsg := "If you installed via 'go install', you can upgrade by running:\n" +
 				"  go install github.com/iksnae/cursor-session@main\n\n" +
 				"Or if you cloned the repo, make sure you're in the repository directory"
-			return fmt.Errorf("failed to find repository: %w\n\n%s", err, helpMsg)
+			return fmt.Errorf("failed to find repository: %w\n\n%s", err, helpMsg) //nolint:stylecheck // Multi-line error message for user clarity
 		}
 
 		// Check if git is available
@@ -59,7 +59,9 @@ This command will:
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
-		defer os.Chdir(originalDir)
+		defer func() {
+			_ = os.Chdir(originalDir)
+		}()
 
 		if err := os.Chdir(repoPath); err != nil {
 			return fmt.Errorf("failed to change to repository directory: %w", err)

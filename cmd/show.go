@@ -29,10 +29,6 @@ var (
 				Foreground(lipgloss.Color("243")).
 				MarginBottom(1)
 
-	messageDividerStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("240")).
-				Margin(1, 0)
-
 	userMessageStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("39")).
 				Bold(true).
@@ -48,14 +44,8 @@ var (
 				MarginBottom(1)
 
 	timestampStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")).
-			Italic(true)
-
-	messageBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(1, 2).
-			MarginBottom(1)
+		Foreground(lipgloss.Color("240")).
+		Italic(true)
 )
 
 // showCmd represents the show command
@@ -289,7 +279,7 @@ func displayMessage(index int, msg internal.Message, total int) {
 	}
 
 	// Message header
-	header := fmt.Sprintf("%s %s", actorStyle.Render(actorLabel), timestampStyle.Render(fmt.Sprintf("[%d/%d]", index, total)))
+	header := actorStyle.Render(actorLabel) + " " + timestampStyle.Render(fmt.Sprintf("[%d/%d]", index, total))
 	if msg.Timestamp != "" {
 		// Parse and format timestamp
 		if t, err := time.Parse(time.RFC3339, msg.Timestamp); err == nil {

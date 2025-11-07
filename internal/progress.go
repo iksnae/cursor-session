@@ -87,7 +87,7 @@ func showProgressWithGum(ctx context.Context, message string, fn func() error) e
 
 	go func() {
 		defer close(spinnerDone)
-		cmd.Run() // Ignore errors, we'll handle them via context
+		_ = cmd.Run() // Ignore errors, we'll handle them via context
 	}()
 
 	// Run the function
@@ -98,7 +98,7 @@ func showProgressWithGum(ctx context.Context, message string, fn func() error) e
 	// Wait for function or context
 	select {
 	case err := <-done:
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		<-spinnerDone
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\r%s %s\n", errorStyle.Render("✗"), message)
@@ -107,7 +107,7 @@ func showProgressWithGum(ctx context.Context, message string, fn func() error) e
 		fmt.Fprintf(os.Stderr, "\r%s %s\n", successStyle.Render("✓"), message)
 		return nil
 	case <-ctx.Done():
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		<-spinnerDone
 		return ctx.Err()
 	}

@@ -41,13 +41,8 @@ var (
 			Foreground(lipgloss.Color("243"))
 
 	workspaceStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("135")).
-			Italic(true)
-
-	borderStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")).
-			Padding(1, 2)
+		Foreground(lipgloss.Color("135")).
+		Italic(true)
 )
 
 var listCmd = &cobra.Command{
