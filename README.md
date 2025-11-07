@@ -21,8 +21,8 @@ A Go CLI tool to extract and export chat sessions from Cursor Editor's modern gl
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd cursor-chat-cli
+git clone https://github.com/iksnae/cursor-session.git
+cd cursor-session
 
 # Run the install script (fully automatic - no manual steps!)
 ./install.sh
@@ -43,10 +43,10 @@ The script automatically:
 
 ```bash
 # Install directly from source
-go install github.com/k/cursor-session@latest
+go install github.com/iksnae/cursor-session@latest
 
 # Or install from local directory
-cd cursor-chat-cli
+cd cursor-session
 go install .
 ```
 
@@ -154,13 +154,15 @@ cursor-session upgrade
 ```
 
 Upgrades cursor-session to the latest version by:
+
 1. Pulling latest changes from the repository
 2. Rebuilding the binary
 3. Reinstalling to the current installation location
 
 **Note**: This command works if you installed from a cloned repository. If you installed via `go install`, use:
+
 ```bash
-go install github.com/k/cursor-session@latest
+go install github.com/iksnae/cursor-session@latest
 ```
 
 ## Supported Formats
