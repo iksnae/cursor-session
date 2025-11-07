@@ -171,7 +171,11 @@ var showCmd = &cobra.Command{
 
 			// Associate with workspace
 			workspaces, _ := internal.DetectWorkspaces(paths.BasePath)
-			assignedWorkspace := internal.AssociateComposerWithWorkspace(conv.ComposerID, contexts[conv.ComposerID], workspaces)
+			var composerContexts []*internal.MessageContext
+			if ctxs, ok := contexts[conv.ComposerID]; ok {
+				composerContexts = ctxs
+			}
+			assignedWorkspace := internal.AssociateComposerWithWorkspace(conv.ComposerID, composerContexts, workspaces)
 
 			// Normalize
 			normalizer := internal.NewNormalizer()
@@ -241,6 +245,9 @@ var showCmd = &cobra.Command{
 }
 
 func displaySessionHeader(session *internal.Session) {
+	if session == nil {
+		return
+	}
 	header := sessionHeaderStyle.Render(fmt.Sprintf("💬 %s", session.Metadata.Name))
 	fmt.Println(header)
 

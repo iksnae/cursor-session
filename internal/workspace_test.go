@@ -101,7 +101,9 @@ func TestDetectWorkspaces_WithWorkspaceJSON(t *testing.T) {
 		"folder": "/custom/path/to/workspace",
 	}
 	jsonData, _ := json.Marshal(workspaceData)
-	os.WriteFile(workspaceJSONPath, jsonData, 0644)
+	if err := os.WriteFile(workspaceJSONPath, jsonData, 0644); err != nil {
+		t.Fatalf("Failed to write workspace.json: %v", err)
+	}
 
 	workspaces, err := DetectWorkspaces(basePath)
 	if err != nil {

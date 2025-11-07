@@ -129,7 +129,7 @@ func TestJSONLExporter_Export_NilSession(t *testing.T) {
 			t.Error("Export() should panic on nil session")
 		}
 	}()
-	exporter.Export(nil, &buf)
+	_ = exporter.Export(nil, &buf) // Error ignored intentionally for panic test
 }
 
 

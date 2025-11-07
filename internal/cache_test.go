@@ -59,7 +59,9 @@ func TestCacheManager_GetSessionPath(t *testing.T) {
 func TestCacheManager_IsCacheValid(t *testing.T) {
 	cacheDir := testutil.CreateTempDir(t)
 	cm := NewCacheManager(cacheDir)
-	cm.EnsureCacheDir()
+	if err := cm.EnsureCacheDir(); err != nil {
+		t.Fatalf("EnsureCacheDir() error = %v", err)
+	}
 
 	dbPath := filepath.Join(cacheDir, "test.db")
 	// Create a simple test database file
@@ -89,7 +91,9 @@ func TestCacheManager_IsCacheValid(t *testing.T) {
 						CacheVersion:    "1.0",
 					},
 				}
-				cm.SaveIndex(index)
+				if err := cm.SaveIndex(index); err != nil {
+					t.Fatalf("SaveIndex() error = %v", err)
+				}
 			},
 			want:    true,
 			wantErr: false,
@@ -104,7 +108,9 @@ func TestCacheManager_IsCacheValid(t *testing.T) {
 						CacheVersion:    "1.0",
 					},
 				}
-				cm.SaveIndex(index)
+				if err := cm.SaveIndex(index); err != nil {
+					t.Fatalf("SaveIndex() error = %v", err)
+				}
 			},
 			want:    false,
 			wantErr: false,
@@ -119,7 +125,9 @@ func TestCacheManager_IsCacheValid(t *testing.T) {
 						CacheVersion:    "1.0",
 					},
 				}
-				cm.SaveIndex(index)
+				if err := cm.SaveIndex(index); err != nil {
+					t.Fatalf("SaveIndex() error = %v", err)
+				}
 			},
 			want:    false,
 			wantErr: false,
@@ -147,7 +155,9 @@ func TestCacheManager_IsCacheValid(t *testing.T) {
 func TestCacheManager_SaveAndLoadIndex(t *testing.T) {
 	cacheDir := testutil.CreateTempDir(t)
 	cm := NewCacheManager(cacheDir)
-	cm.EnsureCacheDir()
+	if err := cm.EnsureCacheDir(); err != nil {
+		t.Fatalf("EnsureCacheDir() error = %v", err)
+	}
 
 	index := &SessionIndex{
 		Sessions: []SessionIndexEntry{
@@ -189,7 +199,9 @@ func TestCacheManager_SaveAndLoadIndex(t *testing.T) {
 func TestCacheManager_SaveAndLoadSession(t *testing.T) {
 	cacheDir := testutil.CreateTempDir(t)
 	cm := NewCacheManager(cacheDir)
-	cm.EnsureCacheDir()
+	if err := cm.EnsureCacheDir(); err != nil {
+		t.Fatalf("EnsureCacheDir() error = %v", err)
+	}
 
 	session := CreateTestSession("test-session")
 
@@ -215,13 +227,19 @@ func TestCacheManager_SaveAndLoadSession(t *testing.T) {
 func TestCacheManager_LoadAllSessions(t *testing.T) {
 	cacheDir := testutil.CreateTempDir(t)
 	cm := NewCacheManager(cacheDir)
-	cm.EnsureCacheDir()
+	if err := cm.EnsureCacheDir(); err != nil {
+		t.Fatalf("EnsureCacheDir() error = %v", err)
+	}
 
 	session1 := CreateTestSession("session1")
 	session2 := CreateTestSession("session2")
 
-	cm.SaveSession(session1)
-	cm.SaveSession(session2)
+	if err := cm.SaveSession(session1); err != nil {
+		t.Fatalf("SaveSession() error = %v", err)
+	}
+	if err := cm.SaveSession(session2); err != nil {
+		t.Fatalf("SaveSession() error = %v", err)
+	}
 
 	// Create index
 	index := &SessionIndex{
@@ -233,7 +251,9 @@ func TestCacheManager_LoadAllSessions(t *testing.T) {
 			CacheVersion: "1.0",
 		},
 	}
-	cm.SaveIndex(index)
+	if err := cm.SaveIndex(index); err != nil {
+		t.Fatalf("SaveIndex() error = %v", err)
+	}
 
 	sessions, err := cm.LoadAllSessions()
 	if err != nil {
