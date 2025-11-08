@@ -76,24 +76,40 @@ which can help seed the database if it doesn't exist yet.`,
 					fmt.Printf("%s ✅ Found cursor-agent at: %s\n", snoopSuccessStyle.Render(""), snoopPathStyle.Render(agentPath))
 				}
 				fmt.Println(snoopSuccessStyle.Render("✅ Successfully invoked cursor-agent"))
-				// Give it a moment to create the database
+				// Give it time to create the database - cursor-agent may need a moment
 				fmt.Println(snoopInfoStyle.Render("   Waiting for database to be created..."))
-				time.Sleep(3 * time.Second)
+				time.Sleep(5 * time.Second)
 				
 				// Re-check paths after waiting to see if database was created
 				fmt.Println(snoopInfoStyle.Render("   Re-checking paths after database creation..."))
-				time.Sleep(1 * time.Second)
+				
+				// Force a fresh path detection after cursor-agent runs
+				// This ensures we pick up any newly created directories
+				time.Sleep(2 * time.Second)
 			}
 			fmt.Println()
 		}
 
-		// Detect standard paths
+		// Detect standard paths (re-detect if --hello was used to catch new databases)
 		fmt.Println(snoopSectionStyle.Render("📂 Standard Path Detection"))
 		paths, err := internal.DetectStoragePaths()
 		if err != nil {
 			fmt.Printf("%s ❌ Failed to detect storage paths: %v\n", snoopErrorStyle.Render(""), err)
 		} else {
 			displayPathInfo(paths)
+			
+			// If --hello was used and we still don't see agent storage, check if directory was just created
+			if snoopHello && !paths.HasAgentStorage() && paths.AgentStoragePath != "" {
+				// Give it one more moment and check again
+				time.Sleep(1 * time.Second)
+				if info, err := os.Stat(paths.AgentStoragePath); err == nil && info.IsDir() {
+					fmt.Printf("%s ✅ Agent storage directory now exists (created by cursor-agent)\n", snoopSuccessStyle.Render("  "))
+					// Re-scan for databases
+					if storeDBs, err := paths.FindAgentStoreDBs(); err == nil && len(storeDBs) > 0 {
+						fmt.Printf("%s ✅ Found %d store.db file(s) after cursor-agent run\n", snoopSuccessStyle.Render("  "), len(storeDBs))
+					}
+				}
+			}
 		}
 		fmt.Println()
 
@@ -271,6 +287,37 @@ func deepSearchForDatabases() {
 		typ  string
 	}
 
+	// First, specifically check .cursor/chats directory structure (most common for cursor-agent)
+	cursorChatsDir := filepath.Join(home, ".cursor", "chats")
+	if info, err := os.Stat(cursorChatsDir); err == nil && info.IsDir() {
+		// Walk the chats directory looking for store.db files
+		err := filepath.Walk(cursorChatsDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !info.IsDir() && info.Name() == "store.db" {
+				foundDBs = append(foundDBs, struct {
+					path string
+					typ  string
+				}{path: path, typ: "store.db (cursor-agent)"})
+			}
+			return nil
+		})
+		if err == nil && len(foundDBs) > 0 {
+			// Found databases in .cursor/chats, no need to search further
+			fmt.Printf("%s ✅ Found %d database file(s) in .cursor/chats:\n", snoopSuccessStyle.Render("  "), len(foundDBs))
+			for i, db := range foundDBs {
+				if i < 10 {
+					fmt.Printf("    • %s\n", snoopPathStyle.Render(db.path))
+				}
+			}
+			if len(foundDBs) > 10 {
+				fmt.Printf("    ... and %d more\n", len(foundDBs)-10)
+			}
+			return
+		}
+	}
+
 	// Target specific directories where Cursor databases are likely to be
 	searchDirs := []string{
 		filepath.Join(home, ".config"),
@@ -440,25 +487,24 @@ func triggerCursorAgentHello() (string, error) {
 	// Check if CURSOR_API_KEY is set (for non-interactive authentication)
 	hasAPIKey := os.Getenv("CURSOR_API_KEY") != ""
 	
-	// Check if cursor-agent is authenticated before trying to use it
-	checkCmd := exec.Command(cursorAgentPath, "status")
-	checkCmd.Env = os.Environ()
-	var checkStderr bytes.Buffer
-	checkCmd.Stderr = &checkStderr
-	checkCmd.Stdout = &checkStderr
-	if err := checkCmd.Run(); err != nil {
-		// If status check fails, it might mean not authenticated
-		stderrStr := checkStderr.String()
-		if strings.Contains(stderrStr, "Authentication required") || 
-		   strings.Contains(stderrStr, "login") ||
-		   strings.Contains(stderrStr, "not authenticated") {
-			authMsg := "run 'cursor-agent login'"
-			if !hasAPIKey {
-				authMsg += " or set CURSOR_API_KEY environment variable"
+	// Only check authentication status if no API key is set
+	// (API key authentication doesn't require interactive login)
+	if !hasAPIKey {
+		checkCmd := exec.Command(cursorAgentPath, "status")
+		checkCmd.Env = os.Environ()
+		var checkStderr bytes.Buffer
+		checkCmd.Stderr = &checkStderr
+		checkCmd.Stdout = &checkStderr
+		if err := checkCmd.Run(); err != nil {
+			// If status check fails, it might mean not authenticated
+			stderrStr := checkStderr.String()
+			if strings.Contains(stderrStr, "Authentication required") || 
+			   strings.Contains(stderrStr, "login") ||
+			   strings.Contains(stderrStr, "not authenticated") {
+				return foundLocation, fmt.Errorf("cursor-agent found at %s but requires authentication (run 'cursor-agent login' or set CURSOR_API_KEY environment variable)", foundLocation)
 			}
-			return foundLocation, fmt.Errorf("cursor-agent found at %s but requires authentication (%s)", foundLocation, authMsg)
+			// Other errors - continue anyway, might still work
 		}
-		// Other errors - continue anyway, might still work
 	}
 
 	// Run cursor-agent with a simple prompt to trigger session creation
@@ -466,7 +512,7 @@ func triggerCursorAgentHello() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, cursorAgentPath, "--print", "hello", "--model", "auto")
+	cmd := exec.CommandContext(ctx, cursorAgentPath, "-p", "hello", "--model", "auto", "--print")
 	cmd.Env = os.Environ()
 	
 	// Capture stderr to detect authentication errors
