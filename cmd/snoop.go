@@ -425,7 +425,7 @@ func triggerCursorAgentHello() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, cursorAgentPath, "hello", "--print", "--model", "auto")
+	cmd := exec.CommandContext(ctx, cursorAgentPath, "--print", "hello", "--model", "auto")
 	cmd.Env = os.Environ()
 	
 	// Capture stderr to detect authentication errors
