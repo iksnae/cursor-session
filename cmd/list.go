@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -156,7 +157,7 @@ func displaySessionsFromComposers(composers []*internal.RawComposer) {
 
 		msgCount := "0"
 		if len(composer.FullConversationHeadersOnly) > 0 {
-			msgCount = countStyle.Render(fmt.Sprintf("%d", len(composer.FullConversationHeadersOnly)))
+			msgCount = countStyle.Render(strconv.Itoa(len(composer.FullConversationHeadersOnly)))
 		}
 
 		created := ""
@@ -226,7 +227,7 @@ func displaySessionsFromIndex(index *internal.SessionIndex) {
 		nameStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
 		name = nameStyle.Render(name)
 
-		msgCount := countStyle.Render(fmt.Sprintf("%d", entry.MessageCount))
+		msgCount := countStyle.Render(strconv.Itoa(entry.MessageCount))
 
 		created := ""
 		if entry.CreatedAt != "" {
