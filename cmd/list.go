@@ -56,9 +56,10 @@ var listCmd = &cobra.Command{
 			return fmt.Errorf("failed to detect storage paths: %w", err)
 		}
 
-		// Check if globalStorage exists
-		if !paths.GlobalStorageExists() {
-			return fmt.Errorf("globalStorage not found at %s", paths.GetGlobalStorageDBPath())
+		// Create storage backend (handles both desktop app and agent storage)
+		backend, err := internal.NewStorageBackend(paths)
+		if err != nil {
+			return fmt.Errorf("failed to initialize storage: %w", err)
 		}
 
 		// Initialize cache manager (always enabled)
@@ -79,10 +80,19 @@ var listCmd = &cobra.Command{
 			}
 		}
 
-		dbPath := paths.GetGlobalStorageDBPath()
+		// Use appropriate cache key based on storage type
+		var cacheKey string
+		if paths.GlobalStorageExists() {
+			cacheKey = paths.GetGlobalStorageDBPath()
+		} else if paths.HasAgentStorage() {
+			// Use agent storage path as cache key
+			cacheKey = paths.AgentStoragePath
+		} else {
+			cacheKey = "unknown"
+		}
 
 		// Try to load from cache
-		valid, err := cacheManager.IsCacheValid(dbPath)
+		valid, err := cacheManager.IsCacheValid(cacheKey)
 		var index *internal.SessionIndex
 		if err == nil && valid {
 			internal.LogInfo("Loading from cache...")
@@ -90,28 +100,20 @@ var listCmd = &cobra.Command{
 			if err == nil && index != nil {
 				internal.LogInfo("Loaded %d session(s) from cache", len(index.Sessions))
 			} else {
-				internal.LogWarn("Failed to load cache: %v, loading from database...", err)
+				internal.LogWarn("Failed to load cache: %v, loading from storage...", err)
 				index = nil
 			}
 		}
 
-		// Load from database if cache miss
+		// Load from storage if cache miss
 		if index == nil {
-			// Open database
-			db, err := internal.OpenDatabase(dbPath)
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-
 			// Load composers
-			storage := internal.NewStorage(db)
-			composers, err := storage.LoadComposers()
+			composers, err := backend.LoadComposers()
 			if err != nil {
 				return fmt.Errorf("failed to load composers: %w", err)
 			}
 
-			// Display sessions from database
+			// Display sessions from storage
 			displaySessionsFromComposers(composers)
 			return nil
 		}

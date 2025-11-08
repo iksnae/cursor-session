@@ -72,3 +72,90 @@ func TestDetectStoragePaths_ErrorCases(t *testing.T) {
 	// The actual test would require runtime manipulation which is complex
 }
 
+func TestDetectStoragePaths_AgentStoragePath(t *testing.T) {
+	paths, err := DetectStoragePaths()
+	if err != nil {
+		t.Fatalf("DetectStoragePaths() error = %v", err)
+	}
+
+	if runtime.GOOS == "linux" {
+		// On Linux, AgentStoragePath should be set
+		home, _ := os.UserHomeDir()
+		expected := filepath.Join(home, ".cursor/chats")
+		if paths.AgentStoragePath != expected {
+			t.Errorf("AgentStoragePath = %v, want %v", paths.AgentStoragePath, expected)
+		}
+	} else if runtime.GOOS == "darwin" {
+		// On macOS, AgentStoragePath should be empty
+		if paths.AgentStoragePath != "" {
+			t.Errorf("AgentStoragePath = %v, want empty string on macOS", paths.AgentStoragePath)
+		}
+	}
+}
+
+func TestHasAgentStorage(t *testing.T) {
+	paths, _ := DetectStoragePaths()
+
+	// Test with nonexistent path
+	testPaths := StoragePaths{
+		AgentStoragePath: "/nonexistent/path/.cursor/chats",
+	}
+	exists := testPaths.HasAgentStorage()
+	if exists {
+		t.Error("HasAgentStorage() should return false for nonexistent path")
+	}
+
+	// Test with empty path (macOS case)
+	testPaths.AgentStoragePath = ""
+	exists = testPaths.HasAgentStorage()
+	if exists {
+		t.Error("HasAgentStorage() should return false for empty path")
+	}
+
+	// Test with actual path (if it exists)
+	if paths.AgentStoragePath != "" {
+		exists = paths.HasAgentStorage()
+		// This will be true or false depending on whether the directory exists
+		// We just verify it doesn't panic
+		_ = exists
+	}
+}
+
+func TestFindAgentStoreDBs(t *testing.T) {
+	paths, _ := DetectStoragePaths()
+
+	// Test with nonexistent path
+	testPaths := StoragePaths{
+		AgentStoragePath: "/nonexistent/path/.cursor/chats",
+	}
+	storeDBs, err := testPaths.FindAgentStoreDBs()
+	if err != nil {
+		t.Errorf("FindAgentStoreDBs() error = %v, want nil", err)
+	}
+	if storeDBs != nil && len(storeDBs) > 0 {
+		t.Error("FindAgentStoreDBs() should return empty slice for nonexistent path")
+	}
+
+	// Test with empty path
+	testPaths.AgentStoragePath = ""
+	storeDBs, err = testPaths.FindAgentStoreDBs()
+	if err != nil {
+		t.Errorf("FindAgentStoreDBs() error = %v, want nil", err)
+	}
+	if storeDBs != nil && len(storeDBs) > 0 {
+		t.Error("FindAgentStoreDBs() should return nil for empty path")
+	}
+
+	// Test with actual path (if it exists)
+	if paths.AgentStoragePath != "" && paths.HasAgentStorage() {
+		storeDBs, err = paths.FindAgentStoreDBs()
+		if err != nil {
+			t.Errorf("FindAgentStoreDBs() error = %v", err)
+		}
+		// Just verify it doesn't panic and returns a slice (may be empty)
+		if storeDBs == nil {
+			t.Error("FindAgentStoreDBs() should return a slice, not nil")
+		}
+	}
+}
+

@@ -1,0 +1,480 @@
+package internal
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+)
+
+// AgentStorageReader reads session data from cursor-agent CLI store.db files
+type AgentStorageReader struct {
+	storeDBPaths []string
+}
+
+// NewAgentStorageReader creates a new AgentStorageReader with the given store.db paths
+func NewAgentStorageReader(storeDBPaths []string) *AgentStorageReader {
+	return &AgentStorageReader{
+		storeDBPaths: storeDBPaths,
+	}
+}
+
+// QueryBlobsTable queries the blobs table from a store.db file
+func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
+	// Check if blobs table exists
+	var tableExists bool
+	err := db.QueryRow(`
+		SELECT EXISTS (
+			SELECT name FROM sqlite_master 
+			WHERE type='table' AND name='blobs'
+		)
+	`).Scan(&tableExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for blobs table: %w", err)
+	}
+
+	if !tableExists {
+		return []BlobEntry{}, nil
+	}
+
+	// Query all blobs - we'll need to inspect the schema
+	// Common patterns: key-value, id-data, etc.
+	// Try to get column names first
+	rows, err := db.Query("PRAGMA table_info(blobs)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get blobs table info: %w", err)
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			continue
+		}
+		columns = append(columns, name)
+	}
+
+	if len(columns) == 0 {
+		return []BlobEntry{}, nil
+	}
+
+	// Build query based on common column patterns
+	// Try key-value pattern first (most common for session storage)
+	var query string
+	if containsString(columns, "key") && containsString(columns, "value") {
+		query = "SELECT key, value FROM blobs WHERE value IS NOT NULL"
+	} else if containsString(columns, "id") && containsString(columns, "data") {
+		query = "SELECT id, data FROM blobs WHERE data IS NOT NULL"
+	} else if len(columns) >= 2 {
+		// Use first two columns
+		query = fmt.Sprintf("SELECT %s, %s FROM blobs WHERE %s IS NOT NULL", columns[0], columns[1], columns[1])
+	} else {
+		return []BlobEntry{}, nil
+	}
+
+	rows, err = db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query blobs table: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []BlobEntry
+	for rows.Next() {
+		var entry BlobEntry
+		var value sql.NullString
+		if err := rows.Scan(&entry.Key, &value); err != nil {
+			continue
+		}
+		if value.Valid {
+			entry.Value = value.String
+			entries = append(entries, entry)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return entries, nil
+}
+
+// QueryMetaTable queries the meta table from a store.db file
+func QueryMetaTable(db *sql.DB) ([]MetaEntry, error) {
+	// Check if meta table exists
+	var tableExists bool
+	err := db.QueryRow(`
+		SELECT EXISTS (
+			SELECT name FROM sqlite_master 
+			WHERE type='table' AND name='meta'
+		)
+	`).Scan(&tableExists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for meta table: %w", err)
+	}
+
+	if !tableExists {
+		return []MetaEntry{}, nil
+	}
+
+	// Query meta table - similar flexible approach
+	rows, err := db.Query("PRAGMA table_info(meta)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get meta table info: %w", err)
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			continue
+		}
+		columns = append(columns, name)
+	}
+
+	if len(columns) == 0 {
+		return []MetaEntry{}, nil
+	}
+
+	var query string
+	if containsString(columns, "key") && containsString(columns, "value") {
+		query = "SELECT key, value FROM meta WHERE value IS NOT NULL"
+	} else if containsString(columns, "id") && containsString(columns, "data") {
+		query = "SELECT id, data FROM meta WHERE data IS NOT NULL"
+	} else if len(columns) >= 2 {
+		query = fmt.Sprintf("SELECT %s, %s FROM meta WHERE %s IS NOT NULL", columns[0], columns[1], columns[1])
+	} else {
+		return []MetaEntry{}, nil
+	}
+
+	rows, err = db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query meta table: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []MetaEntry
+	for rows.Next() {
+		var entry MetaEntry
+		var value sql.NullString
+		if err := rows.Scan(&entry.Key, &value); err != nil {
+			continue
+		}
+		if value.Valid {
+			entry.Value = value.String
+			entries = append(entries, entry)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return entries, nil
+}
+
+// BlobEntry represents an entry from the blobs table
+type BlobEntry struct {
+	Key   string
+	Value string
+}
+
+// MetaEntry represents an entry from the meta table
+type MetaEntry struct {
+	Key   string
+	Value string
+}
+
+// LoadSessionFromStoreDB loads session data from a single store.db file
+func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawComposer, map[string][]*MessageContext, error) {
+	db, err := OpenDatabase(dbPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to open store.db: %w", err)
+	}
+	defer db.Close()
+
+	// Query both tables
+	blobs, err := QueryBlobsTable(db)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to query blobs table: %w", err)
+	}
+
+	meta, err := QueryMetaTable(db)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to query meta table: %w", err)
+	}
+
+	// Extract session ID from path: ~/.cursor/chats/{hash}/{session-id}/store.db
+	// Use this to help identify the session
+	sessionID := extractSessionIDFromPath(dbPath)
+
+	// Parse blobs and meta entries to extract bubbles, composers, and contexts
+	bubbles := make(map[string]*RawBubble)
+	var composers []*RawComposer
+	contexts := make(map[string][]*MessageContext)
+
+	// Process blobs - they may contain bubble data
+	for _, blob := range blobs {
+		// Try to parse as JSON and identify the type
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(blob.Value), &data); err != nil {
+			// Not JSON, skip
+			continue
+		}
+
+		// Check if it's a bubble (has bubbleId or similar)
+		if _, ok := data["bubbleId"].(string); ok {
+			bubble, err := parseBubbleFromData(blob.Key, data, sessionID)
+			if err == nil {
+				bubbles[bubble.BubbleID] = bubble
+			}
+		}
+
+		// Check if it's a composer (has composerId)
+		if composerID, ok := data["composerId"].(string); ok {
+			composer, err := parseComposerFromData(blob.Key, data)
+			if err == nil {
+				composer.ComposerID = composerID
+				composers = append(composers, composer)
+			}
+		}
+	}
+
+	// Process meta - may contain context or additional metadata
+	for _, entry := range meta {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(entry.Value), &data); err != nil {
+			continue
+		}
+
+		// Check if it's a message context
+		if _, ok := data["contextId"].(string); ok {
+			context, err := parseContextFromData(entry.Key, data)
+			if err == nil {
+				composerID := context.ComposerID
+				if composerID == "" {
+					// Try to extract from key or data
+					if cid, ok := data["composerId"].(string); ok {
+						composerID = cid
+						context.ComposerID = composerID
+					}
+				}
+				if composerID != "" {
+					contexts[composerID] = append(contexts[composerID], context)
+				}
+			}
+		}
+	}
+
+	return bubbles, composers, contexts, nil
+}
+
+// LoadAllSessionsFromAgentStorage loads all sessions from all store.db files
+func (r *AgentStorageReader) LoadAllSessionsFromAgentStorage() (map[string]*RawBubble, []*RawComposer, map[string][]*MessageContext, error) {
+	allBubbles := make(map[string]*RawBubble)
+	var allComposers []*RawComposer
+	allContexts := make(map[string][]*MessageContext)
+
+	for _, dbPath := range r.storeDBPaths {
+		bubbles, composers, contexts, err := LoadSessionFromStoreDB(dbPath)
+		if err != nil {
+			// Log error but continue with other files
+			LogWarn("Failed to load session from %s: %v", dbPath, err)
+			continue
+		}
+
+		// Merge bubbles (use bubbleID as key, so duplicates are overwritten)
+		for id, bubble := range bubbles {
+			allBubbles[id] = bubble
+		}
+
+		// Append composers
+		allComposers = append(allComposers, composers...)
+
+		// Merge contexts
+		for composerID, ctxList := range contexts {
+			allContexts[composerID] = append(allContexts[composerID], ctxList...)
+		}
+	}
+
+	return allBubbles, allComposers, allContexts, nil
+}
+
+// Helper functions
+
+func containsString(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func extractSessionIDFromPath(path string) string {
+	// Extract session ID from path: ~/.cursor/chats/{hash}/{session-id}/store.db
+	dir := filepath.Dir(path)
+	sessionID := filepath.Base(dir)
+	return sessionID
+}
+
+func parseBubbleFromData(key string, data map[string]interface{}, sessionID string) (*RawBubble, error) {
+	bubble := &RawBubble{}
+
+	// Extract bubbleId
+	if id, ok := data["bubbleId"].(string); ok {
+		bubble.BubbleID = id
+	} else {
+		return nil, fmt.Errorf("missing bubbleId in data")
+	}
+
+	// Extract chatId (use sessionID if not present)
+	if chatID, ok := data["chatId"].(string); ok {
+		bubble.ChatID = chatID
+	} else {
+		bubble.ChatID = sessionID
+	}
+
+	// Extract text
+	if text, ok := data["text"].(string); ok {
+		bubble.Text = text
+	}
+
+	// Extract richText
+	if richText, ok := data["richText"].(string); ok {
+		bubble.RichText = richText
+	}
+
+	// Extract codeBlocks
+	if codeBlocks, ok := data["codeBlocks"].([]interface{}); ok {
+		for _, cb := range codeBlocks {
+			if cbMap, ok := cb.(map[string]interface{}); ok {
+				codeBlock := CodeBlock{}
+				if lang, ok := cbMap["language"].(string); ok {
+					codeBlock.Language = lang
+				}
+				if content, ok := cbMap["content"].(string); ok {
+					codeBlock.Content = content
+				}
+				bubble.CodeBlocks = append(bubble.CodeBlocks, codeBlock)
+			}
+		}
+	}
+
+	// Extract timestamp
+	if ts, ok := data["timestamp"].(float64); ok {
+		bubble.Timestamp = int64(ts)
+	} else if ts, ok := data["timestamp"].(int64); ok {
+		bubble.Timestamp = ts
+	}
+
+	// Extract type
+	if t, ok := data["type"].(float64); ok {
+		bubble.Type = int(t)
+	} else if t, ok := data["type"].(int); ok {
+		bubble.Type = t
+	}
+
+	return bubble, nil
+}
+
+func parseComposerFromData(key string, data map[string]interface{}) (*RawComposer, error) {
+	composer := &RawComposer{}
+
+	// Extract composerId
+	if id, ok := data["composerId"].(string); ok {
+		composer.ComposerID = id
+	}
+
+	// Extract name
+	if name, ok := data["name"].(string); ok {
+		composer.Name = name
+	}
+
+	// Extract fullConversationHeadersOnly
+	if headers, ok := data["fullConversationHeadersOnly"].([]interface{}); ok {
+		for _, h := range headers {
+			if hMap, ok := h.(map[string]interface{}); ok {
+				header := ConversationHeader{}
+				if bubbleID, ok := hMap["bubbleId"].(string); ok {
+					header.BubbleID = bubbleID
+				}
+				if t, ok := hMap["type"].(float64); ok {
+					header.Type = int(t)
+				} else if t, ok := hMap["type"].(int); ok {
+					header.Type = t
+				}
+				composer.FullConversationHeadersOnly = append(composer.FullConversationHeadersOnly, header)
+			}
+		}
+	}
+
+	// Extract timestamps
+	if ts, ok := data["createdAt"].(float64); ok {
+		composer.CreatedAt = int64(ts)
+	} else if ts, ok := data["createdAt"].(int64); ok {
+		composer.CreatedAt = ts
+	}
+
+	if ts, ok := data["lastUpdatedAt"].(float64); ok {
+		composer.LastUpdatedAt = int64(ts)
+	} else if ts, ok := data["lastUpdatedAt"].(int64); ok {
+		composer.LastUpdatedAt = ts
+	}
+
+	return composer, nil
+}
+
+func parseContextFromData(key string, data map[string]interface{}) (*MessageContext, error) {
+	context := &MessageContext{}
+
+	// Extract contextId
+	if id, ok := data["contextId"].(string); ok {
+		context.ContextID = id
+	}
+
+	// Extract bubbleId
+	if id, ok := data["bubbleId"].(string); ok {
+		context.BubbleID = id
+	}
+
+	// Extract composerId
+	if id, ok := data["composerId"].(string); ok {
+		context.ComposerID = id
+	}
+
+	// Extract other optional fields
+	if gitStatus, ok := data["gitStatusRaw"].(string); ok {
+		context.GitStatusRaw = gitStatus
+	}
+
+	if terminalFiles, ok := data["terminalFiles"].([]interface{}); ok {
+		for _, tf := range terminalFiles {
+			if str, ok := tf.(string); ok {
+				context.TerminalFiles = append(context.TerminalFiles, str)
+			}
+		}
+	}
+
+	if projectLayouts, ok := data["projectLayouts"].([]interface{}); ok {
+		for _, pl := range projectLayouts {
+			if str, ok := pl.(string); ok {
+				context.ProjectLayouts = append(context.ProjectLayouts, str)
+			}
+		}
+	}
+
+	return context, nil
+}
+

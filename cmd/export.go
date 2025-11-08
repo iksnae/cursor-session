@@ -31,9 +31,10 @@ var exportCmd = &cobra.Command{
 			return fmt.Errorf("failed to detect storage paths: %w", err)
 		}
 
-		// Check if globalStorage exists
-		if !paths.GlobalStorageExists() {
-			return fmt.Errorf("globalStorage not found at %s", paths.GetGlobalStorageDBPath())
+		// Create storage backend (handles both desktop app and agent storage)
+		backend, err := internal.NewStorageBackend(paths)
+		if err != nil {
+			return fmt.Errorf("failed to initialize storage: %w", err)
 		}
 
 		// Initialize cache manager (always enabled)
@@ -55,10 +56,19 @@ var exportCmd = &cobra.Command{
 		}
 
 		var sessions []*internal.Session
-		dbPath := paths.GetGlobalStorageDBPath()
+
+		// Use appropriate cache key based on storage type
+		var cacheKey string
+		if paths.GlobalStorageExists() {
+			cacheKey = paths.GetGlobalStorageDBPath()
+		} else if paths.HasAgentStorage() {
+			cacheKey = paths.AgentStoragePath
+		} else {
+			cacheKey = "unknown"
+		}
 
 		// Try to load from cache
-		valid, err := cacheManager.IsCacheValid(dbPath)
+		valid, err := cacheManager.IsCacheValid(cacheKey)
 		if err == nil && valid {
 			internal.LogInfo("Loading sessions from cache...")
 			sessions, err = cacheManager.LoadAllSessions()
@@ -72,23 +82,15 @@ var exportCmd = &cobra.Command{
 
 		// Reconstruct if cache miss
 		if sessions == nil {
-			// Open database
-			db, err := internal.OpenDatabase(dbPath)
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-
-			storage := internal.NewStorage(db)
 			var conversations []*internal.ReconstructedConversation
 
 			ctx := context.Background()
 			steps := []internal.ProgressStep{
 				{
-					Message: "Loading data from database",
+					Message: "Loading data from storage",
 					Fn: func() error {
 						var loadErr error
-						bubbleChan, composerChan, contextChan, loadErr := internal.LoadDataAsync(storage)
+						bubbleChan, composerChan, contextChan, loadErr := internal.LoadDataAsyncFromBackend(backend)
 						if loadErr != nil {
 							return fmt.Errorf("failed to load data: %w", loadErr)
 						}
@@ -109,7 +111,7 @@ var exportCmd = &cobra.Command{
 
 						// Load contexts for workspace association
 						var contexts map[string][]*internal.MessageContext
-						contexts, _ = storage.LoadMessageContexts()
+						contexts, _ = backend.LoadMessageContexts()
 
 						// Normalize with workspace association
 						normalizer := internal.NewNormalizer()
@@ -139,7 +141,7 @@ var exportCmd = &cobra.Command{
 					Message: "Caching sessions",
 					Fn: func() error {
 						// Save to cache
-						if err := cacheManager.SaveSessions(sessions, dbPath); err != nil {
+						if err := cacheManager.SaveSessions(sessions, cacheKey); err != nil {
 							internal.LogWarn("Failed to save cache: %v", err)
 						}
 						return nil

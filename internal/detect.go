@@ -12,6 +12,7 @@ type StoragePaths struct {
 	WorkspaceStorage string // workspaceStorage directory
 	GlobalStorage    string // globalStorage directory (modern format)
 	BasePath         string // Base Cursor User directory
+	AgentStoragePath string // cursor-agent CLI storage directory (~/.cursor/chats/)
 }
 
 // DetectStoragePaths detects the Cursor storage paths based on the operating system
@@ -22,11 +23,15 @@ func DetectStoragePaths() (StoragePaths, error) {
 	}
 
 	var basePath string
+	var agentStoragePath string
 	switch runtime.GOOS {
 	case "darwin":
 		basePath = filepath.Join(home, "Library/Application Support/Cursor/User")
+		// Agent storage is Linux-only
+		agentStoragePath = ""
 	case "linux":
 		basePath = filepath.Join(home, ".config/Cursor/User")
+		agentStoragePath = filepath.Join(home, ".cursor/chats")
 	default:
 		return StoragePaths{}, fmt.Errorf("unsupported OS: %s (only macOS and Linux are supported)", runtime.GOOS)
 	}
@@ -35,6 +40,7 @@ func DetectStoragePaths() (StoragePaths, error) {
 		WorkspaceStorage: filepath.Join(basePath, "workspaceStorage"),
 		GlobalStorage:    filepath.Join(basePath, "globalStorage"),
 		BasePath:         basePath,
+		AgentStoragePath: agentStoragePath,
 	}, nil
 }
 
@@ -48,4 +54,47 @@ func (sp StoragePaths) GlobalStorageExists() bool {
 	dbPath := sp.GetGlobalStorageDBPath()
 	_, err := os.Stat(dbPath)
 	return err == nil
+}
+
+// HasAgentStorage checks if the agent storage directory exists
+func (sp StoragePaths) HasAgentStorage() bool {
+	if sp.AgentStoragePath == "" {
+		return false
+	}
+	info, err := os.Stat(sp.AgentStoragePath)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
+// FindAgentStoreDBs scans the agent storage directory and returns a list of store.db file paths
+func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
+	if !sp.HasAgentStorage() {
+		return []string{}, nil
+	}
+
+	var storeDBs []string
+	err := filepath.Walk(sp.AgentStoragePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Skip directories we can't access
+			if info != nil && info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Look for store.db files
+		if !info.IsDir() && info.Name() == "store.db" {
+			storeDBs = append(storeDBs, path)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan agent storage directory: %w", err)
+	}
+
+	return storeDBs, nil
 }

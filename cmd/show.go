@@ -63,9 +63,10 @@ var showCmd = &cobra.Command{
 			return fmt.Errorf("failed to detect storage paths: %w", err)
 		}
 
-		// Check if globalStorage exists
-		if !paths.GlobalStorageExists() {
-			return fmt.Errorf("globalStorage not found at %s", paths.GetGlobalStorageDBPath())
+		// Create storage backend (handles both desktop app and agent storage)
+		backend, err := internal.NewStorageBackend(paths)
+		if err != nil {
+			return fmt.Errorf("failed to initialize storage: %w", err)
 		}
 
 		// Initialize cache manager (always enabled)
@@ -76,13 +77,22 @@ var showCmd = &cobra.Command{
 		}
 		cacheDir := filepath.Join(homeDir, ".cursor-session-cache")
 		cacheManager := internal.NewCacheManager(cacheDir)
-		dbPath := paths.GetGlobalStorageDBPath()
+
+		// Use appropriate cache key based on storage type
+		var cacheKey string
+		if paths.GlobalStorageExists() {
+			cacheKey = paths.GetGlobalStorageDBPath()
+		} else if paths.HasAgentStorage() {
+			cacheKey = paths.AgentStoragePath
+		} else {
+			cacheKey = "unknown"
+		}
 
 		var session *internal.Session
 
 		// Try to load from cache (even if cache is "invalid", individual sessions may still be valid)
 		// First check if cache is valid
-		valid, err := cacheManager.IsCacheValid(dbPath)
+		valid, err := cacheManager.IsCacheValid(cacheKey)
 		if err != nil {
 			internal.LogDebug("Cache validation error: %v", err)
 		} else if !valid {
@@ -95,7 +105,7 @@ var showCmd = &cobra.Command{
 		index, err := cacheManager.LoadIndex()
 		if err == nil && index != nil {
 			// Verify index is for the same database (path check)
-			if index.Metadata.DatabasePath == dbPath {
+			if index.Metadata.DatabasePath == cacheKey {
 				internal.LogDebug("Index loaded with %d sessions, searching for composer ID: %s", len(index.Sessions), sessionID)
 				// Find session by composer ID
 				for _, entry := range index.Sessions {
@@ -117,29 +127,21 @@ var showCmd = &cobra.Command{
 			internal.LogDebug("Failed to load index: %v", err)
 		}
 
-		// Load from database if not in cache
+		// Load from storage if not in cache
 		if session == nil {
-			internal.LogInfo("Session not in cache, reconstructing from database...")
-			// Open database
-			db, err := internal.OpenDatabase(dbPath)
-			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
-			}
-			defer db.Close()
-
-			// Load data
-			storage := internal.NewStorage(db)
-			bubbles, err := storage.LoadBubbles()
+			internal.LogInfo("Session not in cache, reconstructing from storage...")
+			// Load data using backend
+			bubbles, err := backend.LoadBubbles()
 			if err != nil {
 				return fmt.Errorf("failed to load bubbles: %w", err)
 			}
 
-			composers, err := storage.LoadComposers()
+			composers, err := backend.LoadComposers()
 			if err != nil {
 				return fmt.Errorf("failed to load composers: %w", err)
 			}
 
-			contexts, err := storage.LoadMessageContexts()
+			contexts, err := backend.LoadMessageContexts()
 			if err != nil {
 				return fmt.Errorf("failed to load contexts: %w", err)
 			}
@@ -185,7 +187,7 @@ var showCmd = &cobra.Command{
 			}
 
 			// Save to cache for future use
-			if err := cacheManager.SaveSessionAndUpdateIndex(session, dbPath); err != nil {
+			if err := cacheManager.SaveSessionAndUpdateIndex(session, cacheKey); err != nil {
 				internal.LogWarn("Failed to save session to cache: %v", err)
 			} else {
 				internal.LogInfo("Session cached for faster future access")

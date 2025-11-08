@@ -216,4 +216,86 @@ func TestStorage_LoadCodeBlockDiffs_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestStorage_ImplementsStorageBackend(t *testing.T) {
+	// Test that Storage implements StorageBackend interface
+	var _ StorageBackend = (*Storage)(nil)
+}
+
+func TestAgentStorage_ImplementsStorageBackend(t *testing.T) {
+	// Test that AgentStorage implements StorageBackend interface
+	var _ StorageBackend = (*AgentStorage)(nil)
+}
+
+func TestNewAgentStorage(t *testing.T) {
+	paths := []string{"/path1/store.db", "/path2/store.db"}
+	agentStorage := NewAgentStorage(paths)
+
+	if agentStorage == nil {
+		t.Fatal("NewAgentStorage() returned nil")
+	}
+
+	if agentStorage.reader == nil {
+		t.Error("NewAgentStorage() did not initialize reader")
+	}
+}
+
+func TestAgentStorage_LoadCodeBlockDiffs(t *testing.T) {
+	agentStorage := NewAgentStorage([]string{})
+	diffs, err := agentStorage.LoadCodeBlockDiffs()
+	if err != nil {
+		t.Fatalf("LoadCodeBlockDiffs() error = %v", err)
+	}
+
+	if diffs == nil {
+		t.Error("LoadCodeBlockDiffs() should return a map, not nil")
+	}
+
+	if len(diffs) != 0 {
+		t.Errorf("LoadCodeBlockDiffs() returned %d diffs, want 0", len(diffs))
+	}
+}
+
+func TestNewStorageBackend_DesktopAppFormat(t *testing.T) {
+	// This test requires a real database file, so we'll skip it if not available
+	// In a real scenario, we'd use test fixtures
+	paths, err := DetectStoragePaths()
+	if err != nil {
+		t.Fatalf("DetectStoragePaths() error = %v", err)
+	}
+
+	// Only test if globalStorage exists
+	if paths.GlobalStorageExists() {
+		backend, err := NewStorageBackend(paths)
+		if err != nil {
+			t.Fatalf("NewStorageBackend() error = %v", err)
+		}
+
+		if backend == nil {
+			t.Fatal("NewStorageBackend() returned nil")
+		}
+
+		// Verify it's a Storage instance (desktop app format)
+		if _, ok := backend.(*Storage); !ok {
+			t.Error("NewStorageBackend() should return *Storage when globalStorage exists")
+		}
+	}
+}
+
+func TestNewStorageBackend_NoStorageAvailable(t *testing.T) {
+	// Create paths with nonexistent storage
+	testPaths := StoragePaths{
+		GlobalStorage:    "/nonexistent/globalStorage",
+		AgentStoragePath: "/nonexistent/.cursor/chats",
+	}
+
+	backend, err := NewStorageBackend(testPaths)
+	if err == nil {
+		t.Error("NewStorageBackend() should return error when no storage is available")
+	}
+
+	if backend != nil {
+		t.Error("NewStorageBackend() should return nil backend on error")
+	}
+}
+
 

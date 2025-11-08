@@ -155,6 +155,11 @@ func ReconstructAsync(
 
 // LoadDataAsync loads all data asynchronously and sends to channels
 func LoadDataAsync(storage *Storage) (<-chan *RawBubble, <-chan *RawComposer, <-chan *MessageContext, error) {
+	return LoadDataAsyncFromBackend(storage)
+}
+
+// LoadDataAsyncFromBackend loads all data asynchronously from a StorageBackend and sends to channels
+func LoadDataAsyncFromBackend(backend StorageBackend) (<-chan *RawBubble, <-chan *RawComposer, <-chan *MessageContext, error) {
 	bubbleChan := make(chan *RawBubble, 100)
 	composerChan := make(chan *RawComposer, 100)
 	contextChan := make(chan *MessageContext, 100)
@@ -166,7 +171,7 @@ func LoadDataAsync(storage *Storage) (<-chan *RawBubble, <-chan *RawComposer, <-
 	go func() {
 		defer wg.Done()
 		defer close(bubbleChan)
-		bubbles, err := storage.LoadBubbles()
+		bubbles, err := backend.LoadBubbles()
 		if err != nil {
 			return
 		}
@@ -180,7 +185,7 @@ func LoadDataAsync(storage *Storage) (<-chan *RawBubble, <-chan *RawComposer, <-
 	go func() {
 		defer wg.Done()
 		defer close(composerChan)
-		composers, err := storage.LoadComposers()
+		composers, err := backend.LoadComposers()
 		if err != nil {
 			return
 		}
@@ -194,7 +199,7 @@ func LoadDataAsync(storage *Storage) (<-chan *RawBubble, <-chan *RawComposer, <-
 	go func() {
 		defer wg.Done()
 		defer close(contextChan)
-		contexts, err := storage.LoadMessageContexts()
+		contexts, err := backend.LoadMessageContexts()
 		if err != nil {
 			return
 		}

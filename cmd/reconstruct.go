@@ -27,26 +27,19 @@ var reconstructCmd = &cobra.Command{
 			return fmt.Errorf("failed to detect storage paths: %w", err)
 		}
 
-		// Check if globalStorage exists
-		if !paths.GlobalStorageExists() {
-			return fmt.Errorf("globalStorage not found at %s", paths.GetGlobalStorageDBPath())
-		}
-
-		// Open database
-		db, err := internal.OpenDatabase(paths.GetGlobalStorageDBPath())
+		// Create storage backend (handles both desktop app and agent storage)
+		backend, err := internal.NewStorageBackend(paths)
 		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+			return fmt.Errorf("failed to initialize storage: %w", err)
 		}
-		defer db.Close()
 
-		storage := internal.NewStorage(db)
 		var conversations []*internal.ReconstructedConversation
 
 		// Load data asynchronously with progress
 		ctx := context.Background()
-		err = internal.ShowProgress(ctx, "Loading data from database", func() error {
+		err = internal.ShowProgress(ctx, "Loading data from storage", func() error {
 			var loadErr error
-			bubbleChan, composerChan, contextChan, loadErr := internal.LoadDataAsync(storage)
+			bubbleChan, composerChan, contextChan, loadErr := internal.LoadDataAsyncFromBackend(backend)
 			if loadErr != nil {
 				return fmt.Errorf("failed to load data: %w", loadErr)
 			}
