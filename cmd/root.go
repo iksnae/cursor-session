@@ -54,4 +54,7 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
+	
+	// Set version template to ensure --version flag works
+	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 }
