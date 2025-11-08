@@ -75,6 +75,9 @@ func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
 	}
 
 	var storeDBs []string
+	var dirsScanned int
+	var dirsWithFiles int
+	
 	err := filepath.Walk(sp.AgentStoragePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			// Skip directories we can't access
@@ -82,6 +85,15 @@ func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
 				return filepath.SkipDir
 			}
 			return nil
+		}
+
+		if info.IsDir() {
+			dirsScanned++
+			// Check if this directory contains a store.db file
+			storeDBPath := filepath.Join(path, "store.db")
+			if _, err := os.Stat(storeDBPath); err == nil {
+				dirsWithFiles++
+			}
 		}
 
 		// Look for store.db files
@@ -94,6 +106,11 @@ func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan agent storage directory: %w", err)
+	}
+
+	// Log diagnostic information in verbose mode
+	if len(storeDBs) == 0 && dirsScanned > 0 {
+		LogInfo("Scanned %d directories in agent storage, found %d directories with files, but no store.db files", dirsScanned, dirsWithFiles)
 	}
 
 	return storeDBs, nil

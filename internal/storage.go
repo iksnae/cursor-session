@@ -188,10 +188,15 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 		agentStorageChecked = true
 		storeDBs, err := paths.FindAgentStoreDBs()
 		if err != nil {
-			return nil, fmt.Errorf("failed to find agent store databases: %w", err)
-		}
-		if len(storeDBs) > 0 {
+			// Log warning but continue to provide helpful error message
+			LogWarn("Error scanning agent storage directory: %v", err)
+			// Continue to show helpful error message below
+		} else if len(storeDBs) > 0 {
+			LogInfo("Found %d session database(s) in agent storage", len(storeDBs))
 			return NewAgentStorage(storeDBs), nil
+		} else {
+			// Directory exists but no store.db files found
+			LogInfo("Agent storage directory exists but no store.db files found")
 		}
 	}
 
@@ -204,13 +209,15 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 	if agentStorageChecked {
 		if paths.AgentStoragePath != "" {
 			errMsg.WriteString(fmt.Sprintf("  • Agent CLI: %s (directory exists but no store.db files found)\n", paths.AgentStoragePath))
-			errMsg.WriteString(fmt.Sprintf("    → Expected files: %s/*/store.db\n", paths.AgentStoragePath))
+			errMsg.WriteString(fmt.Sprintf("    → Expected pattern: %s/{hash}/{session-id}/store.db\n", paths.AgentStoragePath))
+			errMsg.WriteString(fmt.Sprintf("    → Sessions are created when cursor-agent CLI runs with chat interactions\n"))
 		} else {
 			errMsg.WriteString("  • Agent CLI: not available on this platform\n")
 		}
 	} else {
 		if paths.AgentStoragePath != "" {
 			errMsg.WriteString(fmt.Sprintf("  • Agent CLI: %s (directory not found)\n", paths.AgentStoragePath))
+			errMsg.WriteString(fmt.Sprintf("    → This directory is created when cursor-agent CLI is first used\n"))
 		} else {
 			errMsg.WriteString("  • Agent CLI: not available on this platform\n")
 		}
@@ -219,9 +226,12 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 	// Check if we're in a CI environment
 	if isCIEnvironment() {
 		errMsg.WriteString("\n")
-		errMsg.WriteString("Note: This is expected in CI/CD environments where Cursor IDE is not installed.\n")
-		errMsg.WriteString("To export sessions in CI, ensure cursor-agent CLI has created session data.\n")
-		errMsg.WriteString("Sessions are typically created when cursor-agent runs with chat interactions.\n")
+		errMsg.WriteString("CI/CD Environment Detected:\n")
+		errMsg.WriteString("  • This is expected if cursor-agent hasn't created sessions yet.\n")
+		errMsg.WriteString("  • Sessions are created automatically when cursor-agent CLI runs.\n")
+		errMsg.WriteString("  • If you just ran cursor-agent commands, sessions should appear shortly.\n")
+		errMsg.WriteString("  • Try running: ls -la ~/.cursor/chats/ to verify session directories exist.\n")
+		errMsg.WriteString("  • Each session directory should contain a store.db file.\n")
 	} else {
 		errMsg.WriteString("\n")
 		errMsg.WriteString("To use this tool, you need either:\n")
