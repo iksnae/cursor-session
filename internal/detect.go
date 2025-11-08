@@ -31,7 +31,19 @@ func DetectStoragePaths() (StoragePaths, error) {
 		agentStoragePath = ""
 	case "linux":
 		basePath = filepath.Join(home, ".config/Cursor/User")
-		agentStoragePath = filepath.Join(home, ".cursor/chats")
+		// Check both possible locations for cursor-agent storage
+		// Priority: .config/cursor/chats (newer location) then .cursor/chats (older location)
+		configCursorChats := filepath.Join(home, ".config/cursor/chats")
+		dotCursorChats := filepath.Join(home, ".cursor/chats")
+		
+		if info, err := os.Stat(configCursorChats); err == nil && info.IsDir() {
+			agentStoragePath = configCursorChats
+		} else if info, err := os.Stat(dotCursorChats); err == nil && info.IsDir() {
+			agentStoragePath = dotCursorChats
+		} else {
+			// Default to .cursor/chats if neither exists (for backward compatibility)
+			agentStoragePath = dotCursorChats
+		}
 	default:
 		return StoragePaths{}, fmt.Errorf("unsupported OS: %s (only macOS and Linux are supported)", runtime.GOOS)
 	}

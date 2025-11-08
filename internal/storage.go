@@ -230,13 +230,13 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 		errMsg.WriteString("  • This is expected if cursor-agent hasn't created sessions yet.\n")
 		errMsg.WriteString("  • Sessions are created automatically when cursor-agent CLI runs.\n")
 		errMsg.WriteString("  • If you just ran cursor-agent commands, sessions should appear shortly.\n")
-		errMsg.WriteString("  • Try running: ls -la ~/.cursor/chats/ to verify session directories exist.\n")
+		errMsg.WriteString("  • Check both locations: ~/.config/cursor/chats/ or ~/.cursor/chats/\n")
 		errMsg.WriteString("  • Each session directory should contain a store.db file.\n")
 	} else {
 		errMsg.WriteString("\n")
 		errMsg.WriteString("To use this tool, you need either:\n")
 		errMsg.WriteString("  • Cursor IDE desktop app with chat history, or\n")
-		errMsg.WriteString("  • cursor-agent CLI with active sessions in ~/.cursor/chats/\n")
+		errMsg.WriteString("  • cursor-agent CLI with active sessions in ~/.config/cursor/chats/ or ~/.cursor/chats/\n")
 	}
 	
 	return nil, fmt.Errorf("%s", errMsg.String())

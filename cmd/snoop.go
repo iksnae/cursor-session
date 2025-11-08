@@ -185,18 +185,27 @@ func displayPathInfo(paths internal.StoragePaths) {
 
 	fmt.Println()
 	fmt.Println(snoopInfoStyle.Render("Agent Storage:"))
-	if paths.AgentStoragePath != "" {
-		fmt.Printf("  %s\n", snoopPathStyle.Render(paths.AgentStoragePath))
-		checkPath(paths.AgentStoragePath, "  ")
-
-		if paths.HasAgentStorage() {
-			storeDBs, err := paths.FindAgentStoreDBs()
+	home, _ := os.UserHomeDir()
+	agentStoragePaths := []string{
+		filepath.Join(home, ".config/cursor/chats"), // Newer location (CI/GH workflows)
+		filepath.Join(home, ".cursor/chats"),        // Older location (local installs)
+	}
+	
+	foundAgentStorage := false
+	for _, agentPath := range agentStoragePaths {
+		fmt.Printf("  %s\n", snoopPathStyle.Render(agentPath))
+		if info, err := os.Stat(agentPath); err == nil && info.IsDir() {
+			foundAgentStorage = true
+			fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Directory exists"))
+			// Create a temporary StoragePaths to use FindAgentStoreDBs
+			tempPaths := internal.StoragePaths{AgentStoragePath: agentPath}
+			storeDBs, err := tempPaths.FindAgentStoreDBs()
 			if err != nil {
-				fmt.Printf("%s ⚠️  Error scanning: %v\n", snoopWarningStyle.Render("  "), err)
+				fmt.Printf("  %s ❌ Error scanning: %v\n", snoopErrorStyle.Render(""), err)
 			} else if len(storeDBs) > 0 {
-				fmt.Printf("%s ✅ Found %d store.db file(s)\n", snoopSuccessStyle.Render("  "), len(storeDBs))
+				fmt.Printf("  %s ✅ Found %d store.db file(s)\n", snoopSuccessStyle.Render(""), len(storeDBs))
 				for i, db := range storeDBs {
-					if i < 3 { // Show first 3
+					if i < 3 {
 						fmt.Printf("    • %s\n", snoopPathStyle.Render(db))
 					}
 				}
@@ -204,12 +213,17 @@ func displayPathInfo(paths internal.StoragePaths) {
 					fmt.Printf("    ... and %d more\n", len(storeDBs)-3)
 				}
 			} else {
-				fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Directory exists but no store.db files found"))
+				fmt.Printf("  %s ⚠️  Directory exists but no store.db files found\n", snoopWarningStyle.Render(""))
 			}
+			break // Found the active location, no need to check others
 		} else {
-			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Directory does not exist"))
+			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Does not exist"))
 		}
-	} else {
+	}
+	
+	if !foundAgentStorage && runtime.GOOS == "linux" {
+		fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  No agent storage directories found"))
+	} else if runtime.GOOS != "linux" {
 		fmt.Printf("  %s\n", snoopInfoStyle.Render("ℹ️  Not available on this OS (Linux only)"))
 	}
 }
@@ -287,34 +301,41 @@ func deepSearchForDatabases() {
 		typ  string
 	}
 
-	// First, specifically check .cursor/chats directory structure (most common for cursor-agent)
-	cursorChatsDir := filepath.Join(home, ".cursor", "chats")
-	if info, err := os.Stat(cursorChatsDir); err == nil && info.IsDir() {
-		// Walk the chats directory looking for store.db files
-		err := filepath.Walk(cursorChatsDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if !info.IsDir() && info.Name() == "store.db" {
-				foundDBs = append(foundDBs, struct {
-					path string
-					typ  string
-				}{path: path, typ: "store.db (cursor-agent)"})
-			}
-			return nil
-		})
-		if err == nil && len(foundDBs) > 0 {
-			// Found databases in .cursor/chats, no need to search further
-			fmt.Printf("%s ✅ Found %d database file(s) in .cursor/chats:\n", snoopSuccessStyle.Render("  "), len(foundDBs))
-			for i, db := range foundDBs {
-				if i < 10 {
-					fmt.Printf("    • %s\n", snoopPathStyle.Render(db.path))
+	// First, specifically check cursor-agent storage directories (check both locations)
+	// Priority: .config/cursor/chats (newer location used in CI/GH workflows) then .cursor/chats
+	cursorChatsDirs := []string{
+		filepath.Join(home, ".config", "cursor", "chats"), // Newer location (CI/GH workflows)
+		filepath.Join(home, ".cursor", "chats"),            // Older location (local installs)
+	}
+	
+	for _, cursorChatsDir := range cursorChatsDirs {
+		if info, err := os.Stat(cursorChatsDir); err == nil && info.IsDir() {
+			// Walk the chats directory looking for store.db files
+			err := filepath.Walk(cursorChatsDir, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return nil
 				}
+				if !info.IsDir() && info.Name() == "store.db" {
+					foundDBs = append(foundDBs, struct {
+						path string
+						typ  string
+					}{path: path, typ: "store.db (cursor-agent)"})
+				}
+				return nil
+			})
+			if err == nil && len(foundDBs) > 0 {
+				// Found databases, no need to search further
+				fmt.Printf("%s ✅ Found %d database file(s) in %s:\n", snoopSuccessStyle.Render("  "), len(foundDBs), cursorChatsDir)
+				for i, db := range foundDBs {
+					if i < 10 {
+						fmt.Printf("    • %s\n", snoopPathStyle.Render(db.path))
+					}
+				}
+				if len(foundDBs) > 10 {
+					fmt.Printf("    ... and %d more\n", len(foundDBs)-10)
+				}
+				return
 			}
-			if len(foundDBs) > 10 {
-				fmt.Printf("    ... and %d more\n", len(foundDBs)-10)
-			}
-			return
 		}
 	}
 
