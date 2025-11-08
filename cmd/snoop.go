@@ -130,7 +130,7 @@ func displayPathInfo(paths internal.StoragePaths) {
 	// Check for state.vscdb files in workspaceStorage subdirectories
 	if info, err := os.Stat(paths.WorkspaceStorage); err == nil && info.IsDir() {
 		var dbCount int
-		if err := filepath.Walk(paths.WorkspaceStorage, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(paths.WorkspaceStorage, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -138,7 +138,8 @@ func displayPathInfo(paths internal.StoragePaths) {
 				dbCount++
 			}
 			return nil
-		}); err != nil {
+		})
+		if err != nil {
 			fmt.Printf("%s ⚠️  Error scanning workspace storage: %v\n", snoopWarningStyle.Render("  "), err)
 		} else if dbCount > 0 {
 			fmt.Printf("%s ✅ Found %d state.vscdb file(s) in subdirectories\n", snoopSuccessStyle.Render("  "), dbCount)

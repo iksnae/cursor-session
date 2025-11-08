@@ -321,7 +321,7 @@ func triggerCursorAgentSession() error {
 	// Don't wait for completion - just let it run in background
 	// The session should be created shortly
 	go func() {
-		cmd.Wait() // Clean up the process
+		_ = cmd.Wait() // Clean up the process (ignore error)
 	}()
 	
 	return nil
