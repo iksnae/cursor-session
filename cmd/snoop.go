@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -374,7 +376,10 @@ func displaySummary(paths internal.StoragePaths) {
 
 	if len(found) == 0 && len(missing) > 0 {
 		fmt.Println()
-		fmt.Println(snoopInfoStyle.Render("💡 Tip: Use --hello flag to seed the database with cursor-agent"))
+		fmt.Println(snoopInfoStyle.Render("💡 Tips:"))
+		fmt.Println(snoopInfoStyle.Render("  • Use --hello flag to seed the database with cursor-agent"))
+		fmt.Println(snoopInfoStyle.Render("  • Make sure cursor-agent is authenticated: run 'cursor-agent login'"))
+		fmt.Println(snoopInfoStyle.Render("  • In CI environments, Cursor databases won't be found (this is expected)"))
 	}
 }
 
@@ -422,8 +427,11 @@ func triggerCursorAgentHello() error {
 
 	cmd := exec.CommandContext(ctx, cursorAgentPath, "-p", "hello", "--model", "auto", "--print")
 	cmd.Env = os.Environ()
-	cmd.Stdout = os.Stderr // Redirect output to stderr to avoid cluttering
-	cmd.Stderr = os.Stderr
+	
+	// Capture stderr to detect authentication errors
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = os.Stderr // Redirect stdout to stderr to avoid cluttering
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
@@ -440,8 +448,14 @@ func triggerCursorAgentHello() error {
 	select {
 	case err := <-done:
 		if err != nil {
-			// Don't fail if cursor-agent exits with error - it might still create the database
-			// Just log it as a warning
+			// Check if it's an authentication error
+			stderrStr := stderr.String()
+			if strings.Contains(stderrStr, "Authentication required") || 
+			   strings.Contains(stderrStr, "login") ||
+			   strings.Contains(stderrStr, "CURSOR_API_KEY") {
+				return fmt.Errorf("cursor-agent requires authentication: %w (run 'cursor-agent login' or set CURSOR_API_KEY)", err)
+			}
+			// Other errors might still allow database creation, so don't fail completely
 			return nil
 		}
 	case <-ctx.Done():
