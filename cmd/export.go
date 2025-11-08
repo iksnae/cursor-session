@@ -15,6 +15,7 @@ var (
 	format       string
 	outputDir    string
 	workspace    string
+	sessionID    string
 	intermediary bool
 	clearCache   bool
 )
@@ -23,7 +24,10 @@ var (
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export sessions to file",
-	Long:  `Export chat sessions to various formats (jsonl, md, yaml, json).`,
+	Long: `Export chat sessions to various formats (jsonl, md, yaml, json).
+
+You can export all sessions, filter by workspace, or export a specific session by ID.
+Use 'cursor-session list' to see available session IDs.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Detect paths
 		paths, err := internal.DetectStoragePaths()
@@ -165,6 +169,21 @@ var exportCmd = &cobra.Command{
 			sessions = filtered
 		}
 
+		// Filter by session ID if specified
+		if sessionID != "" {
+			filtered := make([]*internal.Session, 0)
+			for _, session := range sessions {
+				if session.ID == sessionID {
+					filtered = append(filtered, session)
+					break // Only one session should match
+				}
+			}
+			if len(filtered) == 0 {
+				return fmt.Errorf("session not found: %s (use 'cursor-session list' to see available sessions)", sessionID)
+			}
+			sessions = filtered
+		}
+
 		// Create exporter
 		exporter, err := export.NewExporter(format)
 		if err != nil {
@@ -217,6 +236,7 @@ func init() {
 	exportCmd.Flags().StringVarP(&format, "format", "f", "jsonl", "Export format (jsonl, md, yaml, json)")
 	exportCmd.Flags().StringVarP(&outputDir, "out", "o", "./exports", "Output directory")
 	exportCmd.Flags().StringVar(&workspace, "workspace", "", "Filter by workspace")
+	exportCmd.Flags().StringVar(&sessionID, "session-id", "", "Export a specific session by ID")
 	exportCmd.Flags().BoolVar(&intermediary, "intermediary", false, "Save intermediary format")
 	exportCmd.Flags().BoolVar(&clearCache, "clear-cache", false, "Clear the cache before running")
 }

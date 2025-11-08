@@ -53,6 +53,10 @@ func TestExportCommand_FlagParsing(t *testing.T) {
 			args: []string{"export", "--workspace", "/path/to/workspace"},
 		},
 		{
+			name: "session-id flag",
+			args: []string{"export", "--session-id", "test-session-id"},
+		},
+		{
 			name: "clear-cache flag",
 			args: []string{"export", "--clear-cache"},
 		},
