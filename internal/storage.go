@@ -224,7 +224,7 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 	}
 	
 	// Check if we're in a CI environment
-	if isCIEnvironment() {
+	if IsCIEnvironment() {
 		errMsg.WriteString("\n")
 		errMsg.WriteString("CI/CD Environment Detected:\n")
 		errMsg.WriteString("  • This is expected if cursor-agent hasn't created sessions yet.\n")
@@ -242,8 +242,8 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 	return nil, fmt.Errorf("%s", errMsg.String())
 }
 
-// isCIEnvironment checks if we're running in a CI/CD environment
-func isCIEnvironment() bool {
+// IsCIEnvironment checks if we're running in a CI/CD environment
+func IsCIEnvironment() bool {
 	// Check common CI environment variables
 	ciVars := []string{
 		"CI",                    // Generic CI indicator

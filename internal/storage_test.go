@@ -330,15 +330,15 @@ func TestIsCIEnvironment(t *testing.T) {
 
 	// Test with CI environment variable set
 	os.Setenv("CI", "true")
-	if !isCIEnvironment() {
-		t.Error("isCIEnvironment() should return true when CI is set")
+	if !IsCIEnvironment() {
+		t.Error("IsCIEnvironment() should return true when CI is set")
 	}
 
 	// Test with GitHub Actions environment variable set
 	os.Unsetenv("CI")
 	os.Setenv("GITHUB_ACTIONS", "true")
-	if !isCIEnvironment() {
-		t.Error("isCIEnvironment() should return true when GITHUB_ACTIONS is set")
+	if !IsCIEnvironment() {
+		t.Error("IsCIEnvironment() should return true when GITHUB_ACTIONS is set")
 	}
 
 	// Test without CI environment variables
