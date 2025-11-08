@@ -254,7 +254,6 @@ func checkAlternativePaths() {
 		name string
 		path string
 	}{
-		{"Windows-style config (if on Linux)", filepath.Join(home, "AppData", "Roaming", "Cursor", "User")},
 		{"Alternative Linux config", filepath.Join(home, ".cursor", "User")},
 		{"Alternative macOS location", filepath.Join(home, "Library", "Preferences", "Cursor", "User")},
 		{"XDG config home (if set)", filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "Cursor", "User")},
@@ -345,7 +344,6 @@ func deepSearchForDatabases() {
 		filepath.Join(home, ".local"),
 		filepath.Join(home, ".cursor"),
 		filepath.Join(home, "Library", "Application Support"), // macOS
-		filepath.Join(home, "AppData"),                        // Windows (if on Linux)
 	}
 
 	// Also check XDG directories if set
