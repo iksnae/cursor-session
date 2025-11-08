@@ -132,7 +132,7 @@ func TestFindAgentStoreDBs(t *testing.T) {
 	if err != nil {
 		t.Errorf("FindAgentStoreDBs() error = %v, want nil", err)
 	}
-	if storeDBs != nil && len(storeDBs) > 0 {
+	if len(storeDBs) > 0 {
 		t.Error("FindAgentStoreDBs() should return empty slice for nonexistent path")
 	}
 
@@ -142,7 +142,7 @@ func TestFindAgentStoreDBs(t *testing.T) {
 	if err != nil {
 		t.Errorf("FindAgentStoreDBs() error = %v, want nil", err)
 	}
-	if storeDBs != nil && len(storeDBs) > 0 {
+	if len(storeDBs) > 0 {
 		t.Error("FindAgentStoreDBs() should return nil for empty path")
 	}
 
