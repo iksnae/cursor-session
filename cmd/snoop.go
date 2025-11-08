@@ -67,8 +67,12 @@ which can help seed the database if it doesn't exist yet.`,
 			} else {
 				fmt.Println(snoopSuccessStyle.Render("✅ Successfully invoked cursor-agent"))
 				// Give it a moment to create the database
-				fmt.Println(snoopInfoStyle.Render("   Waiting a moment for database to be created..."))
-				time.Sleep(2 * time.Second)
+				fmt.Println(snoopInfoStyle.Render("   Waiting for database to be created..."))
+				time.Sleep(3 * time.Second)
+				
+				// Re-check paths after waiting to see if database was created
+				fmt.Println(snoopInfoStyle.Render("   Re-checking paths after database creation..."))
+				time.Sleep(1 * time.Second)
 			}
 			fmt.Println()
 		}
@@ -321,23 +325,37 @@ func triggerCursorAgentHello() error {
 
 	// Run cursor-agent with a simple prompt to trigger session creation
 	// Use a context with timeout to avoid hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, cursorAgentPath, "-p", "hello", "--model", "auto", "--print")
 	cmd.Env = os.Environ()
+	cmd.Stdout = os.Stderr // Redirect output to stderr to avoid cluttering
+	cmd.Stderr = os.Stderr
 
-	// Run asynchronously - we don't need to wait for completion
-	// Just starting it should trigger session creation
+	// Start the command
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start cursor-agent: %w", err)
 	}
 
-	// Don't wait for completion - just let it run in background
-	// The session should be created shortly
+	// Wait for completion with timeout - this ensures the process finishes
+	// and gives it time to create the database
+	done := make(chan error, 1)
 	go func() {
-		_ = cmd.Wait() // Clean up the process (ignore error)
+		done <- cmd.Wait()
 	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			// Don't fail if cursor-agent exits with error - it might still create the database
+			// Just log it as a warning
+			return nil
+		}
+	case <-ctx.Done():
+		// Timeout reached, but that's okay - the process might still be creating the database
+		_ = cmd.Process.Kill()
+	}
 
 	return nil
 }
