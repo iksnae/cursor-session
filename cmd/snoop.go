@@ -65,6 +65,10 @@ which can help seed the database if it doesn't exist yet.`,
 			fmt.Println(snoopInfoStyle.Render("🔍 Invoking cursor-agent to seed database..."))
 			agentPath, err := triggerCursorAgentHello()
 			if err != nil {
+				// Show where cursor-agent was found (if found) even on error
+				if agentPath != "" {
+					fmt.Printf("%s ℹ️  Found cursor-agent at: %s\n", snoopInfoStyle.Render(""), snoopPathStyle.Render(agentPath))
+				}
 				fmt.Printf("%s ⚠️  Could not invoke cursor-agent: %v\n", snoopWarningStyle.Render(""), err)
 				fmt.Println(snoopInfoStyle.Render("   Continuing with path detection anyway..."))
 			} else {
@@ -433,6 +437,9 @@ func triggerCursorAgentHello() (string, error) {
 		return "", fmt.Errorf("cursor-agent not found in PATH or common locations")
 	}
 
+	// Check if CURSOR_API_KEY is set (for non-interactive authentication)
+	hasAPIKey := os.Getenv("CURSOR_API_KEY") != ""
+	
 	// Check if cursor-agent is authenticated before trying to use it
 	checkCmd := exec.Command(cursorAgentPath, "status")
 	checkCmd.Env = os.Environ()
@@ -445,7 +452,11 @@ func triggerCursorAgentHello() (string, error) {
 		if strings.Contains(stderrStr, "Authentication required") || 
 		   strings.Contains(stderrStr, "login") ||
 		   strings.Contains(stderrStr, "not authenticated") {
-			return foundLocation, fmt.Errorf("cursor-agent found at %s but requires authentication (run 'cursor-agent login' or set CURSOR_API_KEY)", foundLocation)
+			authMsg := "run 'cursor-agent login'"
+			if !hasAPIKey {
+				authMsg += " or set CURSOR_API_KEY environment variable"
+			}
+			return foundLocation, fmt.Errorf("cursor-agent found at %s but requires authentication (%s)", foundLocation, authMsg)
 		}
 		// Other errors - continue anyway, might still work
 	}
