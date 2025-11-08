@@ -92,6 +92,11 @@ which can help seed the database if it doesn't exist yet.`,
 		checkAlternativePaths()
 		fmt.Println()
 
+		// Deep search for database files
+		fmt.Println(snoopSectionStyle.Render("🔍 Deep Search for Database Files"))
+		deepSearchForDatabases()
+		fmt.Println()
+
 		// Summary
 		fmt.Println(snoopSectionStyle.Render("📊 Summary"))
 		displaySummary(paths)
@@ -239,6 +244,93 @@ func checkAlternativePaths() {
 
 	if !foundAny {
 		fmt.Println(snoopInfoStyle.Render("ℹ️  No alternative paths found"))
+	}
+}
+
+func deepSearchForDatabases() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println(snoopWarningStyle.Render("⚠️  Could not get home directory"))
+		return
+	}
+
+	fmt.Println(snoopInfoStyle.Render("Searching for database files in likely locations..."))
+
+	var foundDBs []struct {
+		path string
+		typ  string
+	}
+
+	// Target specific directories where Cursor databases are likely to be
+	searchDirs := []string{
+		filepath.Join(home, ".config"),
+		filepath.Join(home, ".local"),
+		filepath.Join(home, ".cursor"),
+		filepath.Join(home, "Library", "Application Support"), // macOS
+		filepath.Join(home, "AppData"),                        // Windows (if on Linux)
+	}
+
+	// Also check XDG directories if set
+	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
+		searchDirs = append(searchDirs, xdgConfig)
+	}
+	if xdgData := os.Getenv("XDG_DATA_HOME"); xdgData != "" {
+		searchDirs = append(searchDirs, xdgData)
+	}
+
+	for _, searchDir := range searchDirs {
+		if _, err := os.Stat(searchDir); err != nil {
+			continue // Skip if directory doesn't exist
+		}
+
+		err := filepath.Walk(searchDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil // Skip errors
+			}
+
+			// Skip common directories that won't have databases
+			if info.IsDir() {
+				base := filepath.Base(path)
+				if base == "node_modules" || base == ".git" || base == ".cache" || base == ".npm" || base == "Cache" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			// Look for database files
+			if info.Name() == "state.vscdb" || info.Name() == "store.db" {
+				typ := "state.vscdb"
+				if info.Name() == "store.db" {
+					typ = "store.db"
+				}
+				foundDBs = append(foundDBs, struct {
+					path string
+					typ  string
+				}{path: path, typ: typ})
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			// Silently skip errors - some directories might not be accessible
+			continue
+		}
+	}
+
+	if len(foundDBs) > 0 {
+		fmt.Printf("%s ✅ Found %d database file(s):\n", snoopSuccessStyle.Render("  "), len(foundDBs))
+		for i, db := range foundDBs {
+			if i < 10 { // Show first 10
+				fmt.Printf("    • %s (%s)\n", snoopPathStyle.Render(db.path), db.typ)
+			}
+		}
+		if len(foundDBs) > 10 {
+			fmt.Printf("    ... and %d more\n", len(foundDBs)-10)
+		}
+	} else {
+		fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  No database files found in likely locations"))
+		fmt.Printf("  %s\n", snoopInfoStyle.Render("  Searched: .config, .local, .cursor, Library/Application Support, XDG directories"))
 	}
 }
 
