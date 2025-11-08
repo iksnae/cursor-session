@@ -53,9 +53,9 @@ func TestHealthcheckVerboseFlag(t *testing.T) {
 		t.Error("healthcheck command should have --verbose flag")
 	}
 	
-	shortFlag := healthcheckCmd.Flag("v")
-	if shortFlag == nil {
-		t.Error("healthcheck command should have -v flag")
+	// Check that the verbose flag has shorthand "v"
+	if verboseFlag != nil && verboseFlag.Shorthand != "v" {
+		t.Error("healthcheck command should have -v flag (shorthand for verbose)")
 	}
 }
 
