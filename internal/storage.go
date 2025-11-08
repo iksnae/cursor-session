@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 )
 
 // StorageBackend is the interface for storage backends that can load session data
@@ -181,7 +183,9 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 	}
 
 	// Fallback to agent storage if available
+	agentStorageChecked := false
 	if paths.HasAgentStorage() {
+		agentStorageChecked = true
 		storeDBs, err := paths.FindAgentStoreDBs()
 		if err != nil {
 			return nil, fmt.Errorf("failed to find agent store databases: %w", err)
@@ -191,6 +195,64 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 		}
 	}
 
-	// Neither format available
-	return nil, fmt.Errorf("no storage format available: globalStorage not found at %s, agent storage not found at %s", paths.GetGlobalStorageDBPath(), paths.AgentStoragePath)
+	// Neither format available - provide detailed error message
+	var errMsg strings.Builder
+	errMsg.WriteString("no Cursor storage found\n\n")
+	errMsg.WriteString("Checked storage locations:\n")
+	errMsg.WriteString(fmt.Sprintf("  • Desktop app: %s (not found)\n", paths.GetGlobalStorageDBPath()))
+	
+	if agentStorageChecked {
+		if paths.AgentStoragePath != "" {
+			errMsg.WriteString(fmt.Sprintf("  • Agent CLI: %s (directory exists but no store.db files found)\n", paths.AgentStoragePath))
+			errMsg.WriteString(fmt.Sprintf("    → Expected files: %s/*/store.db\n", paths.AgentStoragePath))
+		} else {
+			errMsg.WriteString("  • Agent CLI: not available on this platform\n")
+		}
+	} else {
+		if paths.AgentStoragePath != "" {
+			errMsg.WriteString(fmt.Sprintf("  • Agent CLI: %s (directory not found)\n", paths.AgentStoragePath))
+		} else {
+			errMsg.WriteString("  • Agent CLI: not available on this platform\n")
+		}
+	}
+	
+	// Check if we're in a CI environment
+	if isCIEnvironment() {
+		errMsg.WriteString("\n")
+		errMsg.WriteString("Note: This is expected in CI/CD environments where Cursor IDE is not installed.\n")
+		errMsg.WriteString("To export sessions in CI, ensure cursor-agent CLI has created session data.\n")
+		errMsg.WriteString("Sessions are typically created when cursor-agent runs with chat interactions.\n")
+	} else {
+		errMsg.WriteString("\n")
+		errMsg.WriteString("To use this tool, you need either:\n")
+		errMsg.WriteString("  • Cursor IDE desktop app with chat history, or\n")
+		errMsg.WriteString("  • cursor-agent CLI with active sessions in ~/.cursor/chats/\n")
+	}
+	
+	return nil, fmt.Errorf("%s", errMsg.String())
+}
+
+// isCIEnvironment checks if we're running in a CI/CD environment
+func isCIEnvironment() bool {
+	// Check common CI environment variables
+	ciVars := []string{
+		"CI",                    // Generic CI indicator
+		"GITHUB_ACTIONS",        // GitHub Actions
+		"GITLAB_CI",             // GitLab CI
+		"JENKINS_URL",           // Jenkins
+		"CIRCLECI",              // CircleCI
+		"TRAVIS",                // Travis CI
+		"BUILDKITE",             // Buildkite
+		"TEAMCITY_VERSION",      // TeamCity
+		"TF_BUILD",              // Azure DevOps
+		"bamboo_buildKey",       // Bamboo
+	}
+	
+	for _, envVar := range ciVars {
+		if os.Getenv(envVar) != "" {
+			return true
+		}
+	}
+	
+	return false
 }

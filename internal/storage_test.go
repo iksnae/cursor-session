@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/iksnae/cursor-session/testutil"
@@ -296,6 +298,54 @@ func TestNewStorageBackend_NoStorageAvailable(t *testing.T) {
 	if backend != nil {
 		t.Error("NewStorageBackend() should return nil backend on error")
 	}
+
+	// Verify error message contains helpful information
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "no Cursor storage found") {
+		t.Errorf("Error message should mention 'no Cursor storage found', got: %s", errMsg)
+	}
+	if !strings.Contains(errMsg, "Checked storage locations") {
+		t.Errorf("Error message should mention checked locations, got: %s", errMsg)
+	}
+}
+
+func TestIsCIEnvironment(t *testing.T) {
+	// Save original environment
+	originalCI := os.Getenv("CI")
+	originalGHA := os.Getenv("GITHUB_ACTIONS")
+	
+	// Clean up after test
+	defer func() {
+		if originalCI != "" {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
+		if originalGHA != "" {
+			os.Setenv("GITHUB_ACTIONS", originalGHA)
+		} else {
+			os.Unsetenv("GITHUB_ACTIONS")
+		}
+	}()
+
+	// Test with CI environment variable set
+	os.Setenv("CI", "true")
+	if !isCIEnvironment() {
+		t.Error("isCIEnvironment() should return true when CI is set")
+	}
+
+	// Test with GitHub Actions environment variable set
+	os.Unsetenv("CI")
+	os.Setenv("GITHUB_ACTIONS", "true")
+	if !isCIEnvironment() {
+		t.Error("isCIEnvironment() should return true when GITHUB_ACTIONS is set")
+	}
+
+	// Test without CI environment variables
+	os.Unsetenv("CI")
+	os.Unsetenv("GITHUB_ACTIONS")
+	// Note: We can't easily test false case without clearing all CI vars,
+	// but the function should work correctly
 }
 
 
