@@ -62,7 +62,7 @@ which can help seed the database if it doesn't exist yet.`,
 		if snoopHello {
 			fmt.Println(snoopInfoStyle.Render("🔍 Invoking cursor-agent to seed database..."))
 			if err := triggerCursorAgentHello(); err != nil {
-				fmt.Println(snoopWarningStyle.Render(fmt.Sprintf("⚠️  Could not invoke cursor-agent: %v", err)))
+				fmt.Printf("%s ⚠️  Could not invoke cursor-agent: %v\n", snoopWarningStyle.Render(""), err)
 				fmt.Println(snoopInfoStyle.Render("   Continuing with path detection anyway..."))
 			} else {
 				fmt.Println(snoopSuccessStyle.Render("✅ Successfully invoked cursor-agent"))
@@ -77,7 +77,7 @@ which can help seed the database if it doesn't exist yet.`,
 		fmt.Println(snoopSectionStyle.Render("📂 Standard Path Detection"))
 		paths, err := internal.DetectStoragePaths()
 		if err != nil {
-			fmt.Println(snoopErrorStyle.Render(fmt.Sprintf("❌ Failed to detect storage paths: %v", err)))
+			fmt.Printf("%s ❌ Failed to detect storage paths: %v\n", snoopErrorStyle.Render(""), err)
 		} else {
 			displayPathInfo(paths)
 		}
@@ -106,21 +106,21 @@ func displayPathInfo(paths internal.StoragePaths) {
 	fmt.Printf("  %s\n", snoopPathStyle.Render(paths.GlobalStorage))
 	checkPath(paths.GlobalStorage, "  ")
 
-	// Check for state.vscdb in globalStorage
-	dbPath := paths.GetGlobalStorageDBPath()
-	fmt.Printf("  Database: %s\n", snoopPathStyle.Render(dbPath))
-	if paths.GlobalStorageExists() {
-		fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database file exists"))
-		// Try to open it
-		if db, err := internal.OpenDatabase(dbPath); err == nil {
-			db.Close()
-			fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database is accessible"))
+		// Check for state.vscdb in globalStorage
+		dbPath := paths.GetGlobalStorageDBPath()
+		fmt.Printf("  Database: %s\n", snoopPathStyle.Render(dbPath))
+		if paths.GlobalStorageExists() {
+			fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database file exists"))
+			// Try to open it
+			if db, err := internal.OpenDatabase(dbPath); err == nil {
+				db.Close()
+				fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database is accessible"))
+			} else {
+				fmt.Printf("%s ⚠️  Database exists but cannot be opened: %v\n", snoopWarningStyle.Render("  "), err)
+			}
 		} else {
-			fmt.Printf("  %s\n", snoopWarningStyle.Render(fmt.Sprintf("⚠️  Database exists but cannot be opened: %v", err)))
+			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Database file does not exist"))
 		}
-	} else {
-		fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Database file does not exist"))
-	}
 
 	fmt.Println()
 	fmt.Println(snoopInfoStyle.Render("Workspace Storage:"))
@@ -130,7 +130,7 @@ func displayPathInfo(paths internal.StoragePaths) {
 	// Check for state.vscdb files in workspaceStorage subdirectories
 	if info, err := os.Stat(paths.WorkspaceStorage); err == nil && info.IsDir() {
 		var dbCount int
-		filepath.Walk(paths.WorkspaceStorage, func(path string, info os.FileInfo, err error) error {
+		if err := filepath.Walk(paths.WorkspaceStorage, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}
@@ -138,9 +138,10 @@ func displayPathInfo(paths internal.StoragePaths) {
 				dbCount++
 			}
 			return nil
-		})
-		if dbCount > 0 {
-			fmt.Printf("  %s\n", snoopSuccessStyle.Render(fmt.Sprintf("✅ Found %d state.vscdb file(s) in subdirectories", dbCount)))
+		}); err != nil {
+			fmt.Printf("%s ⚠️  Error scanning workspace storage: %v\n", snoopWarningStyle.Render("  "), err)
+		} else if dbCount > 0 {
+			fmt.Printf("%s ✅ Found %d state.vscdb file(s) in subdirectories\n", snoopSuccessStyle.Render("  "), dbCount)
 		} else {
 			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  No state.vscdb files found in subdirectories"))
 		}
@@ -155,9 +156,9 @@ func displayPathInfo(paths internal.StoragePaths) {
 		if paths.HasAgentStorage() {
 			storeDBs, err := paths.FindAgentStoreDBs()
 			if err != nil {
-				fmt.Printf("  %s\n", snoopWarningStyle.Render(fmt.Sprintf("⚠️  Error scanning: %v", err)))
+				fmt.Printf("%s ⚠️  Error scanning: %v\n", snoopWarningStyle.Render("  "), err)
 			} else if len(storeDBs) > 0 {
-				fmt.Printf("  %s\n", snoopSuccessStyle.Render(fmt.Sprintf("✅ Found %d store.db file(s)", len(storeDBs))))
+				fmt.Printf("%s ✅ Found %d store.db file(s)\n", snoopSuccessStyle.Render("  "), len(storeDBs))
 				for i, db := range storeDBs {
 					if i < 3 { // Show first 3
 						fmt.Printf("    • %s\n", snoopPathStyle.Render(db))
@@ -187,7 +188,7 @@ func checkPath(path string, indent string) {
 	} else if os.IsNotExist(err) {
 		fmt.Printf("%s%s\n", indent, snoopWarningStyle.Render("⚠️  Does not exist"))
 	} else {
-		fmt.Printf("%s%s\n", indent, snoopErrorStyle.Render(fmt.Sprintf("❌ Error checking: %v", err)))
+		fmt.Printf("%s%s ❌ Error checking: %v\n", indent, snoopErrorStyle.Render(""), err)
 	}
 }
 
@@ -224,7 +225,7 @@ func checkAlternativePaths() {
 			globalStoragePath := filepath.Join(alt.path, "globalStorage")
 			dbPath := filepath.Join(globalStoragePath, "state.vscdb")
 			if _, err := os.Stat(dbPath); err == nil {
-				fmt.Printf("  %s\n", snoopSuccessStyle.Render(fmt.Sprintf("✅ Database found: %s", dbPath)))
+				fmt.Printf("%s ✅ Database found: %s\n", snoopSuccessStyle.Render("  "), dbPath)
 			}
 		} else {
 			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Not found"))
@@ -334,7 +335,7 @@ func triggerCursorAgentHello() error {
 	// Don't wait for completion - just let it run in background
 	// The session should be created shortly
 	go func() {
-		cmd.Wait() // Clean up the process
+		_ = cmd.Wait() // Clean up the process (ignore error)
 	}()
 
 	return nil
