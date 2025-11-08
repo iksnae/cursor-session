@@ -309,7 +309,7 @@ func triggerCursorAgentSession() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	
-	cmd := exec.CommandContext(ctx, cursorAgentPath, "-p", "hello", "--model", "auto", "--print")
+	cmd := exec.CommandContext(ctx, cursorAgentPath, "hello", "--print", "--model", "auto")
 	cmd.Env = os.Environ()
 	
 	// Run asynchronously - we don't need to wait for completion
