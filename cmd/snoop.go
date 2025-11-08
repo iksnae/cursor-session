@@ -63,10 +63,14 @@ which can help seed the database if it doesn't exist yet.`,
 		// If --hello flag is set, trigger cursor-agent first
 		if snoopHello {
 			fmt.Println(snoopInfoStyle.Render("🔍 Invoking cursor-agent to seed database..."))
-			if err := triggerCursorAgentHello(); err != nil {
+			agentPath, err := triggerCursorAgentHello()
+			if err != nil {
 				fmt.Printf("%s ⚠️  Could not invoke cursor-agent: %v\n", snoopWarningStyle.Render(""), err)
 				fmt.Println(snoopInfoStyle.Render("   Continuing with path detection anyway..."))
 			} else {
+				if agentPath != "" {
+					fmt.Printf("%s ✅ Found cursor-agent at: %s\n", snoopSuccessStyle.Render(""), snoopPathStyle.Render(agentPath))
+				}
 				fmt.Println(snoopSuccessStyle.Render("✅ Successfully invoked cursor-agent"))
 				// Give it a moment to create the database
 				fmt.Println(snoopInfoStyle.Render("   Waiting for database to be created..."))
@@ -384,40 +388,66 @@ func displaySummary(paths internal.StoragePaths) {
 }
 
 // triggerCursorAgentHello invokes cursor-agent with a simple "hello" prompt to seed the database
-func triggerCursorAgentHello() error {
-	// Find cursor-agent in common locations
+// Returns the path where cursor-agent was found, or an error
+func triggerCursorAgentHello() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Find cursor-agent in common locations (check installed locations first, then PATH)
 	possiblePaths := []string{
-		"cursor-agent", // In PATH
-		filepath.Join(os.Getenv("HOME"), ".local/bin/cursor-agent"),
-		filepath.Join(os.Getenv("HOME"), ".cursor/bin/cursor-agent"),
+		filepath.Join(home, ".local/bin/cursor-agent"),  // Most common Linux location
+		filepath.Join(home, ".cursor/bin/cursor-agent"), // Alternative location
+		"cursor-agent", // In PATH (check last)
 	}
 
 	// On macOS, also check common installation locations
 	if runtime.GOOS == "darwin" {
-		possiblePaths = append(possiblePaths,
+		possiblePaths = append([]string{
 			"/usr/local/bin/cursor-agent",
 			"/opt/homebrew/bin/cursor-agent",
-		)
+		}, possiblePaths...)
 	}
 
 	var cursorAgentPath string
+	var foundLocation string
 	for _, path := range possiblePaths {
 		if path == "cursor-agent" {
 			// Check if it's in PATH
-			if _, err := exec.LookPath("cursor-agent"); err == nil {
+			if fullPath, err := exec.LookPath("cursor-agent"); err == nil {
 				cursorAgentPath = "cursor-agent"
+				foundLocation = fullPath
 				break
 			}
 		} else {
-			if _, err := os.Stat(path); err == nil {
+			if info, err := os.Stat(path); err == nil && !info.IsDir() {
 				cursorAgentPath = path
+				foundLocation = path
 				break
 			}
 		}
 	}
 
 	if cursorAgentPath == "" {
-		return fmt.Errorf("cursor-agent not found in PATH or common locations")
+		return "", fmt.Errorf("cursor-agent not found in PATH or common locations")
+	}
+
+	// Check if cursor-agent is authenticated before trying to use it
+	checkCmd := exec.Command(cursorAgentPath, "status")
+	checkCmd.Env = os.Environ()
+	var checkStderr bytes.Buffer
+	checkCmd.Stderr = &checkStderr
+	checkCmd.Stdout = &checkStderr
+	if err := checkCmd.Run(); err != nil {
+		// If status check fails, it might mean not authenticated
+		stderrStr := checkStderr.String()
+		if strings.Contains(stderrStr, "Authentication required") || 
+		   strings.Contains(stderrStr, "login") ||
+		   strings.Contains(stderrStr, "not authenticated") {
+			return foundLocation, fmt.Errorf("cursor-agent found at %s but requires authentication (run 'cursor-agent login' or set CURSOR_API_KEY)", foundLocation)
+		}
+		// Other errors - continue anyway, might still work
 	}
 
 	// Run cursor-agent with a simple prompt to trigger session creation
@@ -435,7 +465,7 @@ func triggerCursorAgentHello() error {
 
 	// Start the command
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start cursor-agent: %w", err)
+		return foundLocation, fmt.Errorf("failed to start cursor-agent: %w", err)
 	}
 
 	// Wait for completion with timeout - this ensures the process finishes
@@ -446,24 +476,24 @@ func triggerCursorAgentHello() error {
 	}()
 
 	select {
-	case err := <-done:
-		if err != nil {
-			// Check if it's an authentication error
-			stderrStr := stderr.String()
-			if strings.Contains(stderrStr, "Authentication required") || 
-			   strings.Contains(stderrStr, "login") ||
-			   strings.Contains(stderrStr, "CURSOR_API_KEY") {
-				return fmt.Errorf("cursor-agent requires authentication: %w (run 'cursor-agent login' or set CURSOR_API_KEY)", err)
+		case err := <-done:
+			if err != nil {
+				// Check if it's an authentication error
+				stderrStr := stderr.String()
+				if strings.Contains(stderrStr, "Authentication required") || 
+				   strings.Contains(stderrStr, "login") ||
+				   strings.Contains(stderrStr, "CURSOR_API_KEY") {
+					return foundLocation, fmt.Errorf("cursor-agent requires authentication: %w (run 'cursor-agent login' or set CURSOR_API_KEY)", err)
+				}
+				// Other errors might still allow database creation, so don't fail completely
+				return foundLocation, nil
 			}
-			// Other errors might still allow database creation, so don't fail completely
-			return nil
-		}
-	case <-ctx.Done():
-		// Timeout reached, but that's okay - the process might still be creating the database
-		_ = cmd.Process.Kill()
+		case <-ctx.Done():
+			// Timeout reached, but that's okay - the process might still be creating the database
+			_ = cmd.Process.Kill()
 	}
 
-	return nil
+	return foundLocation, nil
 }
 
 func init() {
