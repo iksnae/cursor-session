@@ -277,36 +277,38 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 				if jsonErr := json.Unmarshal(decoded, &data); jsonErr == nil {
 					// Successfully decoded and parsed
 					LogInfo("Blob %d (key='%s') was base64 encoded, decoded successfully", i+1, blob.Key)
-				} else {
-					// Base64 decoded but not JSON - try extracting JSON from binary
-					jsonBytes, found := extractJSONFromBinary(decoded)
-					if found {
-						if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
-							LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
+					} else {
+						// Base64 decoded but not JSON - try extracting JSON from binary
+						jsonBytes, found := extractJSONFromBinary(decoded)
+						if found {
+							// extractJSONFromBinary already validated it's valid JSON
+							if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+								LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
+							} else {
+								// This shouldn't happen since extractJSONFromBinary validates, but handle it anyway
+								jsonParseFailures++
+								if i < 5 {
+									valuePreview := blob.Value
+									if len(valuePreview) > 100 {
+										valuePreview = valuePreview[:100] + "..."
+									}
+									LogWarn("Blob %d (key='%s') failed JSON parse after extraction: %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+								}
+								continue
+							}
 						} else {
+							// Decoded but still not JSON - log and skip
 							jsonParseFailures++
 							if i < 5 {
 								valuePreview := blob.Value
 								if len(valuePreview) > 100 {
 									valuePreview = valuePreview[:100] + "..."
 								}
-								LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 and binary extraction): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+								LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
 							}
 							continue
 						}
-					} else {
-						// Decoded but still not JSON - log and skip
-						jsonParseFailures++
-						if i < 5 {
-							valuePreview := blob.Value
-							if len(valuePreview) > 100 {
-								valuePreview = valuePreview[:100] + "..."
-							}
-							LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
-						}
-						continue
 					}
-				}
 			} else {
 				// Not base64 - try hex decode (like we do for meta entries)
 				hexDecoded, hexErr := tryHexDecode(blob.Value)
@@ -318,13 +320,14 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 						// Hex decoded but not JSON - try extracting JSON from binary
 						jsonBytes, found := extractJSONFromBinary(hexDecoded)
 						if found {
+							// extractJSONFromBinary already validated it's valid JSON
 							if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
 								LogInfo("Blob %d (key='%s') had JSON embedded in hex-decoded binary data, extracted successfully", i+1, blob.Key)
 							} else {
-								// Hex decoded and JSON found but parse failed - skip
+								// This shouldn't happen since extractJSONFromBinary validates, but handle it anyway
 								jsonParseFailures++
 								if i < 5 {
-									LogWarn("Blob %d (key='%s') hex decoded but JSON parse failed: %v", i+1, blob.Key, jsonErr)
+									LogWarn("Blob %d (key='%s') hex decoded but JSON parse failed after extraction: %v", i+1, blob.Key, jsonErr)
 								}
 								continue
 							}
@@ -341,12 +344,13 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 					// Not hex - try extracting JSON from binary data
 					jsonBytes, found := extractJSONFromBinary(valueBytes)
 					if found {
-						jsonPreview := string(jsonBytes)
-						if len(jsonPreview) > 200 {
-							jsonPreview = jsonPreview[:200] + "..."
-						}
-						LogInfo("Blob %d (key='%s'): Found JSON in binary (len=%d): %s", i+1, blob.Key, len(jsonBytes), jsonPreview)
+						// extractJSONFromBinary already validated it's valid JSON, so we can parse it directly
 						if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+							jsonPreview := string(jsonBytes)
+							if len(jsonPreview) > 200 {
+								jsonPreview = jsonPreview[:200] + "..."
+							}
+							LogInfo("Blob %d (key='%s'): Found valid JSON in binary (len=%d): %s", i+1, blob.Key, len(jsonBytes), jsonPreview)
 							LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
 							// Log fields to understand structure
 							keys := make([]string, 0, len(data))
@@ -355,10 +359,10 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 							}
 							LogInfo("Blob %d extracted JSON fields: %v", i+1, keys)
 						} else {
+							// This shouldn't happen since extractJSONFromBinary validates, but handle it anyway
 							jsonParseFailures++
 							if i < 10 {
-								LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse (tried binary extraction): %v", i+1, blob.Key, len(blob.Key), jsonErr)
-								LogInfo("  Extracted JSON preview: %s", jsonPreview)
+								LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse after extraction: %v", i+1, blob.Key, len(blob.Key), jsonErr)
 							}
 							continue
 						}
@@ -1036,7 +1040,8 @@ func tryHexDecode(s string) ([]byte, error) {
 }
 
 // extractJSONFromBinary attempts to extract a JSON object from binary data
-// Returns the JSON bytes and true if found, or nil and false if not found
+// Returns the JSON bytes and true if found and valid, or nil and false if not found/invalid
+// Validates that the extracted content is actually valid JSON before returning
 func extractJSONFromBinary(data []byte) ([]byte, bool) {
 	// Look for JSON object start
 	startIdx := bytes.Index(data, []byte("{"))
@@ -1072,8 +1077,23 @@ func extractJSONFromBinary(data []byte) ([]byte, bool) {
 			} else if data[i] == '}' {
 				depth--
 				if depth == 0 {
-					// Found complete JSON object
-					return data[startIdx : i+1], true
+					// Found complete brace structure - validate it's actually valid JSON
+					jsonBytes := data[startIdx : i+1]
+					
+					// Quick validation: check if it's valid UTF-8 and has reasonable structure
+					if !utf8.Valid(jsonBytes) {
+						return nil, false
+					}
+					
+					// Try to parse as JSON to ensure it's valid
+					var testData interface{}
+					if err := json.Unmarshal(jsonBytes, &testData); err != nil {
+						// Not valid JSON - might be binary data with { } characters
+						return nil, false
+					}
+					
+					// Valid JSON found
+					return jsonBytes, true
 				}
 			}
 		}
