@@ -45,7 +45,7 @@ esac
 echo ""
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}${BOLD}║                                                          ║${NC}"
-echo -e "${CYAN}${BOLD}║${NC}  ${GREEN}${BOLD}Installing cursor-session CLI${NC}${CYAN}${BOLD}                          ║${NC}"
+echo -e "${CYAN}${BOLD}║${NC}  ${GREEN}${BOLD}Installing cursor-session CLI ${NC}${CYAN}${BOLD}                          ║${NC}"
 echo -e "${CYAN}${BOLD}║                                                          ║${NC}"
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""

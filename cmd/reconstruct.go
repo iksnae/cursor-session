@@ -21,10 +21,30 @@ var reconstructCmd = &cobra.Command{
 	Short: "Reconstruct and save intermediary format",
 	Long:  `Reconstruct conversations and save to intermediary JSON/YAML format for debugging.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Detect paths
-		paths, err := internal.DetectStoragePaths()
+		// Get paths (with optional custom storage location)
+		paths, err := internal.GetStoragePaths(storagePath)
 		if err != nil {
-			return fmt.Errorf("failed to detect storage paths: %w", err)
+			return fmt.Errorf("failed to get storage paths: %w", err)
+		}
+
+		// Copy database files to temp location if --copy flag is set
+		var cleanup func() error
+		if copyDB {
+			var copyErr error
+			paths, cleanup, copyErr = internal.CopyStoragePaths(paths)
+			if copyErr != nil {
+				return fmt.Errorf("failed to copy database files: %w", copyErr)
+			}
+			// Schedule cleanup when command completes
+			defer func() {
+				if cleanup != nil {
+					if err := cleanup(); err != nil {
+						internal.LogWarn("Failed to cleanup temporary files: %v", err)
+					} else {
+						internal.LogInfo("Cleaned up temporary database files")
+					}
+				}
+			}()
 		}
 
 		// Create storage backend (handles both desktop app and agent storage)

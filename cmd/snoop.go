@@ -90,12 +90,31 @@ which can help seed the database if it doesn't exist yet.`,
 			fmt.Println()
 		}
 
-		// Detect standard paths (re-detect if --hello was used to catch new databases)
-		fmt.Println(snoopSectionStyle.Render("📂 Standard Path Detection"))
-		paths, err := internal.DetectStoragePaths()
+		// Get storage paths (with optional custom storage location)
+		fmt.Println(snoopSectionStyle.Render("📂 Storage Path Detection"))
+		paths, err := internal.GetStoragePaths(storagePath)
 		if err != nil {
-			fmt.Printf("%s ❌ Failed to detect storage paths: %v\n", snoopErrorStyle.Render(""), err)
+			fmt.Printf("%s ❌ Failed to get storage paths: %v\n", snoopErrorStyle.Render(""), err)
 		} else {
+			// Copy database files to temp location if --copy flag is set
+			var cleanup func() error
+			if copyDB {
+				var copyErr error
+				paths, cleanup, copyErr = internal.CopyStoragePaths(paths)
+				if copyErr != nil {
+					fmt.Printf("%s ❌ Failed to copy database files: %v\n", snoopErrorStyle.Render(""), copyErr)
+				} else {
+					fmt.Printf("%s ✅ Database files copied to temporary location\n", snoopSuccessStyle.Render(""))
+					// Schedule cleanup when command completes
+					defer func() {
+						if cleanup != nil {
+							if err := cleanup(); err != nil {
+								fmt.Printf("⚠️  Failed to cleanup temporary files: %v\n", err)
+							}
+						}
+					}()
+				}
+			}
 			displayPathInfo(paths)
 			
 			// If --hello was used and we still don't see agent storage, check if directory was just created

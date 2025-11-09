@@ -9,10 +9,12 @@ import (
 )
 
 var (
-	verbose bool
-	version string = "dev"
-	commit  string = "unknown"
-	date    string = "unknown"
+	verbose     bool
+	storagePath string
+	copyDB      bool
+	version     string = "dev"
+	commit      string = "unknown"
+	date        string = "unknown"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -54,6 +56,8 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().StringVar(&storagePath, "storage", "", "Custom storage location (path to database file or storage directory)")
+	rootCmd.PersistentFlags().BoolVar(&copyDB, "copy", false, "Copy database files to temporary location to avoid locking issues")
 	
 	// Set version template to ensure --version flag works
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)

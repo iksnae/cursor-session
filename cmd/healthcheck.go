@@ -54,13 +54,34 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 		fmt.Println(sectionStyle.Render("🔍 Cursor Session Health Check"))
 		fmt.Println()
 
-		// Step 1: Detect storage paths
-		fmt.Println(infoStyle.Render("Step 1: Detecting storage paths..."))
-		paths, err := internal.DetectStoragePaths()
+		// Step 1: Get storage paths (with optional custom storage location)
+		fmt.Println(infoStyle.Render("Step 1: Getting storage paths..."))
+		paths, err := internal.GetStoragePaths(storagePath)
 		if err != nil {
-			fmt.Println(errorStyle.Render("❌ Failed to detect storage paths:"), err)
+			fmt.Println(errorStyle.Render("❌ Failed to get storage paths:"), err)
 			os.Exit(1)
 		}
+
+		// Copy database files to temp location if --copy flag is set
+		var cleanup func() error
+		if copyDB {
+			var copyErr error
+			paths, cleanup, copyErr = internal.CopyStoragePaths(paths)
+			if copyErr != nil {
+				fmt.Println(errorStyle.Render("❌ Failed to copy database files:"), copyErr)
+				os.Exit(1)
+			}
+			fmt.Println(successStyle.Render("✅ Database files copied to temporary location"))
+			// Schedule cleanup when command completes
+			defer func() {
+				if cleanup != nil {
+					if err := cleanup(); err != nil {
+						fmt.Printf("⚠️  Failed to cleanup temporary files: %v\n", err)
+					}
+				}
+			}()
+		}
+
 		fmt.Println(successStyle.Render("✅ Storage paths detected"))
 		if healthcheckVerbose {
 			fmt.Printf("   Base path: %s\n", paths.BasePath)
@@ -219,7 +240,7 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 					time.Sleep(3 * time.Second)
 					
 					// Recheck storage
-					paths2, err2 := internal.DetectStoragePaths()
+					paths2, err2 := internal.GetStoragePaths(storagePath)
 					if err2 == nil {
 						storeDBs2, _ := paths2.FindAgentStoreDBs()
 						if len(storeDBs2) > 0 {
