@@ -330,7 +330,15 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 						continue
 					}
 				} else {
-					// Not base64 and no JSON in binary - the value might be a reference or in a different format
+					// Not base64 and no JSON in binary - try parsing as text message format (text$uuid)
+					// This handles cursor-agent's user message format: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
+					if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
+						bubbles[bubble.BubbleID] = bubble
+						LogInfo("Blob %d parsed as text message format (user message): %s", i+1, bubble.Text)
+						continue
+					}
+					
+					// Not a text message format - the value might be a reference or in a different format
 					// Log detailed info for first few failures to understand the format
 					jsonParseFailures++
 					if i < 10 {
@@ -631,6 +639,72 @@ func parseBubbleFromData(key string, data map[string]interface{}, sessionID stri
 	}
 
 	return bubble, nil
+}
+
+// parseTextMessageFormat parses cursor-agent's text message format: "text$uuid"
+// Returns a RawBubble if the format matches, nil otherwise
+// Handles format like: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d" (may have control chars)
+func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
+	// Clean the value - remove control characters and trim whitespace
+	// The value might have control chars like \x05 at the start
+	cleaned := strings.TrimSpace(value)
+	
+	// Check if value matches pattern: text$uuid
+	// Example: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
+	dollarIdx := strings.Index(cleaned, "$")
+	if dollarIdx == -1 || dollarIdx == 0 {
+		return nil // No $ found or $ is at start
+	}
+	
+	// Extract text before $ and clean it
+	text := strings.TrimSpace(cleaned[:dollarIdx])
+	// Remove any remaining control characters
+	text = strings.Map(func(r rune) rune {
+		if r < 32 && r != '\n' && r != '\r' && r != '\t' {
+			return -1 // Remove control characters except newlines/tabs
+		}
+		return r
+	}, text)
+	text = strings.TrimSpace(text)
+	
+	if text == "" {
+		return nil // No text before $
+	}
+	
+	// Extract UUID after $ (optional, but useful for bubble ID)
+	uuidPart := ""
+	if dollarIdx+1 < len(cleaned) {
+		uuidPart = strings.TrimSpace(cleaned[dollarIdx+1:])
+		// Remove control characters from UUID
+		uuidPart = strings.Map(func(r rune) rune {
+			if r < 32 {
+				return -1
+			}
+			return r
+		}, uuidPart)
+	}
+	
+	// Use UUID as bubble ID if available, otherwise use a hash of the text
+	bubbleID := uuidPart
+	if bubbleID == "" {
+		// Generate a simple ID from the blob key (first 8 chars)
+		if len(key) >= 8 {
+			bubbleID = key[:8]
+		} else {
+			bubbleID = key
+		}
+	}
+	
+	// Create user bubble (type=1 for user messages)
+	bubble := &RawBubble{
+		BubbleID:  bubbleID,
+		ChatID:    sessionID,
+		Type:      1, // User message
+		Text:      text,
+		Timestamp: time.Now().UnixMilli(), // Use current time if not available
+	}
+	
+	return bubble
 }
 
 // parseMessageToBubble converts a message format (id, role, content) to a RawBubble
