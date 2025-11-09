@@ -307,18 +307,18 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 				// Not base64 - try extracting JSON from binary data
 				jsonBytes, found := extractJSONFromBinary(valueBytes)
 				if found {
+					jsonPreview := string(jsonBytes)
+					if len(jsonPreview) > 200 {
+						jsonPreview = jsonPreview[:200] + "..."
+					}
+					LogInfo("Blob %d (key='%s'): Found JSON in binary (len=%d): %s", i+1, blob.Key, len(jsonBytes), jsonPreview)
 					if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
 						LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
 					} else {
 						jsonParseFailures++
 						if i < 10 {
-							valuePreview := blob.Value
-							fullValue := blob.Value
-							if len(valuePreview) > 200 {
-								valuePreview = valuePreview[:200] + "..."
-							}
 							LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse (tried binary extraction): %v", i+1, blob.Key, len(blob.Key), jsonErr)
-							LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+							LogInfo("  Extracted JSON preview: %s", jsonPreview)
 						}
 						continue
 					}
@@ -338,6 +338,10 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 						// Check if value looks like a path or reference
 						if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
 							LogInfo("  Value appears to be a path/reference, not JSON data")
+						}
+						// Check if there's a { in the value that might indicate JSON
+						if bytes.Contains(valueBytes, []byte("{")) {
+							LogInfo("  Value contains '{' but extraction failed - JSON might be incomplete or malformed")
 						}
 					}
 					continue
@@ -782,15 +786,36 @@ func extractJSONFromBinary(data []byte) ([]byte, bool) {
 	}
 	
 	// Try to find matching closing brace with proper brace counting
+	// Need to handle strings that might contain braces
 	depth := 0
+	inString := false
+	escapeNext := false
+	
 	for i := startIdx; i < len(data); i++ {
-		if data[i] == '{' {
-			depth++
-		} else if data[i] == '}' {
-			depth--
-			if depth == 0 {
-				// Found complete JSON object
-				return data[startIdx : i+1], true
+		if escapeNext {
+			escapeNext = false
+			continue
+		}
+		
+		if data[i] == '\\' {
+			escapeNext = true
+			continue
+		}
+		
+		if data[i] == '"' && !escapeNext {
+			inString = !inString
+			continue
+		}
+		
+		if !inString {
+			if data[i] == '{' {
+				depth++
+			} else if data[i] == '}' {
+				depth--
+				if depth == 0 {
+					// Found complete JSON object
+					return data[startIdx : i+1], true
+				}
 			}
 		}
 	}
