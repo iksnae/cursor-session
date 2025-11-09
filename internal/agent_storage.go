@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -272,36 +274,74 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 					// Successfully decoded and parsed
 					LogInfo("Blob %d (key='%s') was base64 encoded, decoded successfully", i+1, blob.Key)
 				} else {
-					// Decoded but still not JSON - log and skip
-					jsonParseFailures++
-					if i < 5 {
-						valuePreview := blob.Value
-						if len(valuePreview) > 100 {
-							valuePreview = valuePreview[:100] + "..."
+					// Base64 decoded but not JSON - try extracting JSON from binary
+					jsonBytes, found := extractJSONFromBinary(decoded)
+					if found {
+						if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+							LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
+						} else {
+							jsonParseFailures++
+							if i < 5 {
+								valuePreview := blob.Value
+								if len(valuePreview) > 100 {
+									valuePreview = valuePreview[:100] + "..."
+								}
+								LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 and binary extraction): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+							}
+							continue
 						}
-						LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+					} else {
+						// Decoded but still not JSON - log and skip
+						jsonParseFailures++
+						if i < 5 {
+							valuePreview := blob.Value
+							if len(valuePreview) > 100 {
+								valuePreview = valuePreview[:100] + "..."
+							}
+							LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+						}
+						continue
+					}
+				}
+			} else {
+				// Not base64 - try extracting JSON from binary data
+				jsonBytes, found := extractJSONFromBinary(valueBytes)
+				if found {
+					if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+						LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
+					} else {
+						jsonParseFailures++
+						if i < 10 {
+							valuePreview := blob.Value
+							fullValue := blob.Value
+							if len(valuePreview) > 200 {
+								valuePreview = valuePreview[:200] + "..."
+							}
+							LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse (tried binary extraction): %v", i+1, blob.Key, len(blob.Key), jsonErr)
+							LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+						}
+						continue
+					}
+				} else {
+					// Not base64 and no JSON in binary - the value might be a reference or in a different format
+					// Log detailed info for first few failures to understand the format
+					jsonParseFailures++
+					if i < 10 {
+						valuePreview := blob.Value
+						fullValue := blob.Value
+						if len(valuePreview) > 200 {
+							valuePreview = valuePreview[:200] + "..."
+						}
+						LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
+						LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+						LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
+						// Check if value looks like a path or reference
+						if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
+							LogInfo("  Value appears to be a path/reference, not JSON data")
+						}
 					}
 					continue
 				}
-			} else {
-				// Not base64 either - the value might be a reference or in a different format
-				// Log detailed info for first few failures to understand the format
-				jsonParseFailures++
-				if i < 10 {
-					valuePreview := blob.Value
-					fullValue := blob.Value
-					if len(valuePreview) > 200 {
-						valuePreview = valuePreview[:200] + "..."
-					}
-					LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
-					LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
-					LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
-					// Check if value looks like a path or reference
-					if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
-						LogInfo("  Value appears to be a path/reference, not JSON data")
-					}
-				}
-				continue
 			}
 		}
 
@@ -358,31 +398,69 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 				if jsonErr := json.Unmarshal(decoded, &data); jsonErr == nil {
 					LogInfo("Meta %d (key='%s') was base64 encoded, decoded successfully", i+1, entry.Key)
 				} else {
-					metaJsonParseFailures++
-					if i < 5 {
-						valuePreview := entry.Value
-						if len(valuePreview) > 100 {
-							valuePreview = valuePreview[:100] + "..."
+					// Base64 decoded but not JSON - try hex decode
+					hexDecoded, hexErr := tryHexDecode(entry.Value)
+					if hexErr == nil {
+						if jsonErr := json.Unmarshal(hexDecoded, &data); jsonErr == nil {
+							LogInfo("Meta %d (key='%s') was hex encoded, decoded successfully", i+1, entry.Key)
+						} else {
+							metaJsonParseFailures++
+							if i < 5 {
+								valuePreview := entry.Value
+								if len(valuePreview) > 100 {
+									valuePreview = valuePreview[:100] + "..."
+								}
+								LogWarn("Meta %d (key='%s') failed JSON parse (tried base64 and hex): %v. Value preview: %s", i+1, entry.Key, jsonErr, valuePreview)
+							}
+							continue
 						}
-						LogWarn("Meta %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, entry.Key, jsonErr, valuePreview)
+					} else {
+						metaJsonParseFailures++
+						if i < 5 {
+							valuePreview := entry.Value
+							if len(valuePreview) > 100 {
+								valuePreview = valuePreview[:100] + "..."
+							}
+							LogWarn("Meta %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, entry.Key, jsonErr, valuePreview)
+						}
+						continue
+					}
+				}
+			} else {
+				// Not base64 - try hex decode
+				hexDecoded, hexErr := tryHexDecode(entry.Value)
+				if hexErr == nil {
+					if jsonErr := json.Unmarshal(hexDecoded, &data); jsonErr == nil {
+						LogInfo("Meta %d (key='%s') was hex encoded, decoded successfully", i+1, entry.Key)
+					} else {
+						metaJsonParseFailures++
+						if i < 10 {
+							valuePreview := entry.Value
+							fullValue := entry.Value
+							if len(valuePreview) > 200 {
+								valuePreview = valuePreview[:200] + "..."
+							}
+							LogWarn("Meta %d (key='%s', key_len=%d) failed JSON parse (tried hex): %v", i+1, entry.Key, len(entry.Key), jsonErr)
+							LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+						}
+						continue
+					}
+				} else {
+					metaJsonParseFailures++
+					if i < 10 {
+						valuePreview := entry.Value
+						fullValue := entry.Value
+						if len(valuePreview) > 200 {
+							valuePreview = valuePreview[:200] + "..."
+						}
+						LogWarn("Meta %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, entry.Key, len(entry.Key), err)
+						LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+						if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
+							LogInfo("  Value appears to be a path/reference, not JSON data")
+						}
 					}
 					continue
 				}
-			} else {
-				metaJsonParseFailures++
-				if i < 10 {
-					valuePreview := entry.Value
-					fullValue := entry.Value
-					if len(valuePreview) > 200 {
-						valuePreview = valuePreview[:200] + "..."
-					}
-					LogWarn("Meta %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, entry.Key, len(entry.Key), err)
-					LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
-					if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
-						LogInfo("  Value appears to be a path/reference, not JSON data")
-					}
-				}
-				continue
 			}
 		}
 
@@ -677,6 +755,47 @@ func tryBase64Decode(s string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("not base64 encoded")
+}
+
+// tryHexDecode attempts to decode a hex-encoded string, returns decoded bytes or error
+func tryHexDecode(s string) ([]byte, error) {
+	// Remove whitespace, newlines, and tabs
+	cleaned := strings.ReplaceAll(s, " ", "")
+	cleaned = strings.ReplaceAll(cleaned, "\n", "")
+	cleaned = strings.ReplaceAll(cleaned, "\t", "")
+	cleaned = strings.ReplaceAll(cleaned, "\r", "")
+	
+	decoded, err := hex.DecodeString(cleaned)
+	if err != nil {
+		return nil, fmt.Errorf("not hex encoded: %w", err)
+	}
+	return decoded, nil
+}
+
+// extractJSONFromBinary attempts to extract a JSON object from binary data
+// Returns the JSON bytes and true if found, or nil and false if not found
+func extractJSONFromBinary(data []byte) ([]byte, bool) {
+	// Look for JSON object start
+	startIdx := bytes.Index(data, []byte("{"))
+	if startIdx == -1 {
+		return nil, false
+	}
+	
+	// Try to find matching closing brace with proper brace counting
+	depth := 0
+	for i := startIdx; i < len(data); i++ {
+		if data[i] == '{' {
+			depth++
+		} else if data[i] == '}' {
+			depth--
+			if depth == 0 {
+				// Found complete JSON object
+				return data[startIdx : i+1], true
+			}
+		}
+	}
+	
+	return nil, false
 }
 
 // isHashLike checks if a string looks like a hash (hex characters, reasonable length)
