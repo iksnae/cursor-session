@@ -768,7 +768,7 @@ func tryHexDecode(s string) ([]byte, error) {
 	cleaned = strings.ReplaceAll(cleaned, "\n", "")
 	cleaned = strings.ReplaceAll(cleaned, "\t", "")
 	cleaned = strings.ReplaceAll(cleaned, "\r", "")
-	
+
 	decoded, err := hex.DecodeString(cleaned)
 	if err != nil {
 		return nil, fmt.Errorf("not hex encoded: %w", err)
@@ -784,29 +784,29 @@ func extractJSONFromBinary(data []byte) ([]byte, bool) {
 	if startIdx == -1 {
 		return nil, false
 	}
-	
+
 	// Try to find matching closing brace with proper brace counting
 	// Need to handle strings that might contain braces
 	depth := 0
 	inString := false
 	escapeNext := false
-	
+
 	for i := startIdx; i < len(data); i++ {
 		if escapeNext {
 			escapeNext = false
 			continue
 		}
-		
+
 		if data[i] == '\\' {
 			escapeNext = true
 			continue
 		}
-		
+
 		if data[i] == '"' && !escapeNext {
 			inString = !inString
 			continue
 		}
-		
+
 		if !inString {
 			if data[i] == '{' {
 				depth++
@@ -819,7 +819,7 @@ func extractJSONFromBinary(data []byte) ([]byte, bool) {
 			}
 		}
 	}
-	
+
 	return nil, false
 }
 
