@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // AgentStorageReader reads session data from cursor-agent CLI store.db files
@@ -362,11 +363,22 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 		}
 		LogInfo("Blob %d (key='%s') parsed successfully. Available fields: %v", i+1, blob.Key, keys)
 
-		// Check if it's a bubble (has bubbleId or similar)
+		// Check if it's a bubble (has bubbleId)
 		if _, ok := data["bubbleId"].(string); ok {
 			bubble, err := parseBubbleFromData(blob.Key, data, sessionID)
 			if err == nil {
 				bubbles[bubble.BubbleID] = bubble
+			}
+		} else if id, ok := data["id"].(string); ok {
+			// Check if it's a message format (has id, role, content) - cursor-agent format
+			if role, hasRole := data["role"].(string); hasRole {
+				bubble, err := parseMessageToBubble(blob.Key, id, role, data, sessionID)
+				if err == nil {
+					bubbles[bubble.BubbleID] = bubble
+					LogInfo("Blob %d converted message (id='%s', role='%s') to bubble (bubbleId='%s')", i+1, id, role, bubble.BubbleID)
+				} else {
+					LogWarn("Blob %d failed to convert message to bubble: %v", i+1, err)
+				}
 			}
 		}
 
@@ -616,6 +628,60 @@ func parseBubbleFromData(key string, data map[string]interface{}, sessionID stri
 		bubble.Type = int(t)
 	} else if t, ok := data["type"].(int); ok {
 		bubble.Type = t
+	}
+
+	return bubble, nil
+}
+
+// parseMessageToBubble converts a message format (id, role, content) to a RawBubble
+// This handles cursor-agent's message format where messages have id, role, and content fields
+func parseMessageToBubble(key, id, role string, data map[string]interface{}, sessionID string) (*RawBubble, error) {
+	bubble := &RawBubble{
+		BubbleID: id,
+		ChatID:   sessionID,
+	}
+
+	// Map role to type: "user" = 1, "assistant" = 2
+	if role == "user" {
+		bubble.Type = 1
+	} else if role == "assistant" {
+		bubble.Type = 2
+	} else {
+		// Default to assistant if unknown
+		bubble.Type = 2
+	}
+
+	// Extract text from content array
+	if content, ok := data["content"].([]interface{}); ok {
+		var textParts []string
+		for _, item := range content {
+			if itemMap, ok := item.(map[string]interface{}); ok {
+				// Check for text content
+				if text, ok := itemMap["text"].(string); ok {
+					textParts = append(textParts, text)
+				} else if data, ok := itemMap["data"].(string); ok {
+					// Some content items have "data" field (like redacted-reasoning)
+					// We can skip these or add them as metadata
+					// For now, skip redacted content
+					if itemType, _ := itemMap["type"].(string); itemType != "redacted-reasoning" {
+						textParts = append(textParts, data)
+					}
+				}
+			}
+		}
+		if len(textParts) > 0 {
+			bubble.Text = strings.Join(textParts, "\n\n")
+		}
+	}
+
+	// Extract timestamp if available
+	if ts, ok := data["timestamp"].(float64); ok {
+		bubble.Timestamp = int64(ts)
+	} else if ts, ok := data["timestamp"].(int64); ok {
+		bubble.Timestamp = ts
+	} else {
+		// Use current time if no timestamp
+		bubble.Timestamp = time.Now().Unix()
 	}
 
 	return bubble, nil
