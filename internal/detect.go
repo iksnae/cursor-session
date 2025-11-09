@@ -274,7 +274,7 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 		sourceDB := paths.GetGlobalStorageDBPath()
 		destDB := filepath.Join(tmpDir, "state.vscdb")
 		
-		if err := copyFile(sourceDB, destDB); err != nil {
+		if err := copyDatabaseWithWAL(sourceDB, destDB); err != nil {
 			_ = cleanup()
 			return StoragePaths{}, nil, fmt.Errorf("failed to copy globalStorage database: %w", err)
 		}
@@ -318,7 +318,7 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 					return StoragePaths{}, nil, fmt.Errorf("failed to create directory for copied database: %w", err)
 				}
 
-				if err := copyFile(sourceDB, destDB); err != nil {
+				if err := copyDatabaseWithWAL(sourceDB, destDB); err != nil {
 					_ = cleanup()
 					return StoragePaths{}, nil, fmt.Errorf("failed to copy agent storage database %s: %w", sourceDB, err)
 				}
@@ -362,6 +362,41 @@ func copyFile(src, dst string) error {
 	// Sync to ensure data is written to disk
 	if err := destFile.Sync(); err != nil {
 		return fmt.Errorf("failed to sync destination file: %w", err)
+	}
+
+	return nil
+}
+
+// copyDatabaseWithWAL copies a database file along with its associated WAL and SHM files if they exist.
+// This ensures complete database data is copied, including uncommitted transactions in WAL files.
+func copyDatabaseWithWAL(srcDB, dstDB string) error {
+	// Copy the main database file
+	if err := copyFile(srcDB, dstDB); err != nil {
+		return err
+	}
+
+	// Check for and copy WAL file if it exists
+	srcWAL := srcDB + "-wal"
+	dstWAL := dstDB + "-wal"
+	if _, err := os.Stat(srcWAL); err == nil {
+		if err := copyFile(srcWAL, dstWAL); err != nil {
+			// Log warning but don't fail - WAL file copy is best effort
+			LogWarn("Failed to copy WAL file %s: %v", srcWAL, err)
+		} else {
+			LogInfo("Copied WAL file: %s", dstWAL)
+		}
+	}
+
+	// Check for and copy SHM file if it exists
+	srcSHM := srcDB + "-shm"
+	dstSHM := dstDB + "-shm"
+	if _, err := os.Stat(srcSHM); err == nil {
+		if err := copyFile(srcSHM, dstSHM); err != nil {
+			// Log warning but don't fail - SHM file copy is best effort
+			LogWarn("Failed to copy SHM file %s: %v", srcSHM, err)
+		} else {
+			LogInfo("Copied SHM file: %s", dstSHM)
+		}
 	}
 
 	return nil

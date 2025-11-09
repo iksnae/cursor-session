@@ -109,7 +109,7 @@ func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
 			LogWarn("Blob row %d has NULL value: key='%s'", rowCount, entry.Key)
 		}
 	}
-	
+
 	LogInfo("QueryBlobsTable: queried %d rows, returned %d valid entries", rowCount, len(entries))
 
 	if err := rows.Err(); err != nil {
@@ -204,7 +204,7 @@ func QueryMetaTable(db *sql.DB) ([]MetaEntry, error) {
 			LogWarn("Meta row %d has NULL value: key='%s'", rowCount, entry.Key)
 		}
 	}
-	
+
 	LogInfo("QueryMetaTable: queried %d rows, returned %d valid entries", rowCount, len(entries))
 
 	if err := rows.Err(); err != nil {
@@ -271,7 +271,7 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			}
 			continue
 		}
-		
+
 		// Log available fields for first few entries
 		if i < 3 {
 			keys := make([]string, 0, len(data))
@@ -306,7 +306,7 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			composers = append(composers, composer)
 		}
 	}
-	
+
 	if jsonParseFailures > 0 {
 		LogWarn("Failed to parse %d/%d blobs as JSON", jsonParseFailures, len(blobs))
 	}
@@ -326,7 +326,7 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			}
 			continue
 		}
-		
+
 		// Log available fields for first few entries
 		if i < 3 {
 			keys := make([]string, 0, len(data))
@@ -354,12 +354,12 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			}
 		}
 	}
-	
+
 	if metaJsonParseFailures > 0 {
 		LogWarn("Failed to parse %d/%d meta entries as JSON", metaJsonParseFailures, len(meta))
 	}
-	
-	LogInfo("LoadSessionFromStoreDB summary: %d blobs queried, %d meta queried, %d bubbles extracted, %d composers extracted, %d contexts extracted", 
+
+	LogInfo("LoadSessionFromStoreDB summary: %d blobs queried, %d meta queried, %d bubbles extracted, %d composers extracted, %d contexts extracted",
 		len(blobs), len(meta), len(bubbles), len(composers), len(contexts))
 
 	return bubbles, composers, contexts, nil
@@ -596,4 +596,3 @@ func parseContextFromData(key string, data map[string]interface{}) (*MessageCont
 
 	return context, nil
 }
-
