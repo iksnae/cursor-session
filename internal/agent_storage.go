@@ -2,9 +2,11 @@ package internal
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // AgentStorageReader reads session data from cursor-agent CLI store.db files
@@ -259,17 +261,48 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 	for i, blob := range blobs {
 		// Try to parse as JSON and identify the type
 		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(blob.Value), &data); err != nil {
-			// Not JSON, skip
-			jsonParseFailures++
-			if i < 3 {
-				valuePreview := blob.Value
-				if len(valuePreview) > 100 {
-					valuePreview = valuePreview[:100] + "..."
+		valueBytes := []byte(blob.Value)
+
+		// Try JSON first
+		if err := json.Unmarshal(valueBytes, &data); err != nil {
+			// Not JSON - try base64 decode in case it's encoded
+			decoded, decodeErr := tryBase64Decode(blob.Value)
+			if decodeErr == nil {
+				if jsonErr := json.Unmarshal(decoded, &data); jsonErr == nil {
+					// Successfully decoded and parsed
+					LogInfo("Blob %d (key='%s') was base64 encoded, decoded successfully", i+1, blob.Key)
+				} else {
+					// Decoded but still not JSON - log and skip
+					jsonParseFailures++
+					if i < 5 {
+						valuePreview := blob.Value
+						if len(valuePreview) > 100 {
+							valuePreview = valuePreview[:100] + "..."
+						}
+						LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+					}
+					continue
 				}
-				LogWarn("Blob %d (key='%s') failed JSON parse: %v. Value preview: %s", i+1, blob.Key, err, valuePreview)
+			} else {
+				// Not base64 either - the value might be a reference or in a different format
+				// Log detailed info for first few failures to understand the format
+				jsonParseFailures++
+				if i < 10 {
+					valuePreview := blob.Value
+					fullValue := blob.Value
+					if len(valuePreview) > 200 {
+						valuePreview = valuePreview[:200] + "..."
+					}
+					LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
+					LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+					LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
+					// Check if value looks like a path or reference
+					if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
+						LogInfo("  Value appears to be a path/reference, not JSON data")
+					}
+				}
+				continue
 			}
-			continue
 		}
 
 		// Log available fields for first few entries
@@ -315,16 +348,42 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 	metaJsonParseFailures := 0
 	for i, entry := range meta {
 		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(entry.Value), &data); err != nil {
-			metaJsonParseFailures++
-			if i < 3 {
-				valuePreview := entry.Value
-				if len(valuePreview) > 100 {
-					valuePreview = valuePreview[:100] + "..."
+		valueBytes := []byte(entry.Value)
+
+		// Try JSON first
+		if err := json.Unmarshal(valueBytes, &data); err != nil {
+			// Not JSON - try base64 decode
+			decoded, decodeErr := tryBase64Decode(entry.Value)
+			if decodeErr == nil {
+				if jsonErr := json.Unmarshal(decoded, &data); jsonErr == nil {
+					LogInfo("Meta %d (key='%s') was base64 encoded, decoded successfully", i+1, entry.Key)
+				} else {
+					metaJsonParseFailures++
+					if i < 5 {
+						valuePreview := entry.Value
+						if len(valuePreview) > 100 {
+							valuePreview = valuePreview[:100] + "..."
+						}
+						LogWarn("Meta %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, entry.Key, jsonErr, valuePreview)
+					}
+					continue
 				}
-				LogWarn("Meta %d (key='%s') failed JSON parse: %v. Value preview: %s", i+1, entry.Key, err, valuePreview)
+			} else {
+				metaJsonParseFailures++
+				if i < 10 {
+					valuePreview := entry.Value
+					fullValue := entry.Value
+					if len(valuePreview) > 200 {
+						valuePreview = valuePreview[:200] + "..."
+					}
+					LogWarn("Meta %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, entry.Key, len(entry.Key), err)
+					LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+					if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
+						LogInfo("  Value appears to be a path/reference, not JSON data")
+					}
+				}
+				continue
 			}
-			continue
 		}
 
 		// Log available fields for first few entries
@@ -595,4 +654,40 @@ func parseContextFromData(key string, data map[string]interface{}) (*MessageCont
 	}
 
 	return context, nil
+}
+
+// tryBase64Decode attempts to decode a base64 string, returns decoded bytes or error
+func tryBase64Decode(s string) ([]byte, error) {
+	// Try standard base64
+	decoded, err := base64.StdEncoding.DecodeString(s)
+	if err == nil {
+		return decoded, nil
+	}
+	// Try URL-safe base64
+	decoded, err = base64.URLEncoding.DecodeString(s)
+	if err == nil {
+		return decoded, nil
+	}
+	// Try with padding
+	if len(s)%4 != 0 {
+		padded := s + strings.Repeat("=", 4-len(s)%4)
+		decoded, err = base64.StdEncoding.DecodeString(padded)
+		if err == nil {
+			return decoded, nil
+		}
+	}
+	return nil, fmt.Errorf("not base64 encoded")
+}
+
+// isHashLike checks if a string looks like a hash (hex characters, reasonable length)
+func isHashLike(s string) bool {
+	if len(s) < 16 || len(s) > 128 {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
