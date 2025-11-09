@@ -49,10 +49,10 @@ If you installed via 'go install', you can also upgrade by running:
 
 		// Use a struct to pass data between steps
 		type upgradeData struct {
-			latestRelease  *githubRelease
-			latestVersion  *semver.Version
-			binaryPath     string
-			tempDir        string
+			latestRelease *githubRelease
+			latestVersion *semver.Version
+			binaryPath    string
+			tempDir       string
 		}
 		data := &upgradeData{}
 
@@ -189,7 +189,7 @@ If you installed via 'go install', you can also upgrade by running:
 		if err := internal.ShowProgressWithSteps(ctx, steps); err != nil {
 			// Cleanup temp directory
 			if data.tempDir != "" {
-				os.RemoveAll(data.tempDir)
+				_ = os.RemoveAll(data.tempDir)
 			}
 			// Check if it's the "already up to date" error
 			if strings.Contains(err.Error(), "already up to date") {
@@ -200,7 +200,7 @@ If you installed via 'go install', you can also upgrade by running:
 
 		// Cleanup temp directory
 		if data.tempDir != "" {
-			os.RemoveAll(data.tempDir)
+			_ = os.RemoveAll(data.tempDir)
 		}
 
 		internal.PrintSuccess("Upgrade complete!")
@@ -243,7 +243,7 @@ func fetchLatestRelease() (*githubRelease, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch release info: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch release info: status %d", resp.StatusCode)
@@ -263,20 +263,18 @@ func getDownloadURL(tagName string) (string, error) {
 	archName := runtime.GOARCH
 
 	// Map architecture names
-	if archName == "amd64" {
-		archName = "amd64"
-	} else if archName == "arm64" {
-		archName = "arm64"
-	} else {
+	switch archName {
+	case "amd64", "arm64":
+		// Keep as is
+	default:
 		return "", fmt.Errorf("unsupported architecture: %s", archName)
 	}
 
 	// Map OS names
-	if osName == "darwin" {
-		osName = "darwin"
-	} else if osName == "linux" {
-		osName = "linux"
-	} else {
+	switch osName {
+	case "darwin", "linux":
+		// Keep as is
+	default:
 		return "", fmt.Errorf("unsupported OS: %s", osName)
 	}
 
@@ -295,7 +293,7 @@ func downloadFile(url, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download: status %d", resp.StatusCode)
@@ -305,7 +303,7 @@ func downloadFile(url, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, resp.Body); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
@@ -319,13 +317,13 @@ func extractBinary(archivePath, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open archive: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzr.Close()
+	defer func() { _ = gzr.Close() }()
 
 	tr := tar.NewReader(gzr)
 
@@ -343,7 +341,7 @@ func extractBinary(archivePath, destPath string) error {
 			if err != nil {
 				return fmt.Errorf("failed to create binary file: %w", err)
 			}
-			defer out.Close()
+			defer func() { _ = out.Close() }()
 
 			if _, err := io.Copy(out, tr); err != nil {
 				return fmt.Errorf("failed to extract binary: %w", err)
@@ -366,13 +364,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer sourceFile.Close()
+	defer func() { _ = sourceFile.Close() }()
 
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	if _, err := io.Copy(destFile, sourceFile); err != nil {
 		return err
@@ -384,4 +382,3 @@ func copyFile(src, dst string) error {
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
 }
-

@@ -78,14 +78,14 @@ fi
 # Add to PATH if not already present
 if [ -n "$SHELL_CONFIG" ]; then
     PATH_LINE="export PATH=\"\$PATH:$INSTALL_DIR\""
-    
+
     if ! grep -q "$INSTALL_DIR" "$SHELL_CONFIG" 2>/dev/null; then
         echo -e "${YELLOW}Adding $INSTALL_DIR to PATH in $SHELL_CONFIG...${NC}"
         echo "" >> "$SHELL_CONFIG"
         echo "# cursor-session CLI" >> "$SHELL_CONFIG"
         echo "$PATH_LINE" >> "$SHELL_CONFIG"
         echo -e "${GREEN}PATH updated in $SHELL_CONFIG${NC}"
-        
+
         # Source the config file for current session
         if [ "$SHELL_NAME" = "zsh" ]; then
             source "$SHELL_CONFIG" 2>/dev/null || true

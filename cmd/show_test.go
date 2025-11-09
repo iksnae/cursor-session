@@ -124,17 +124,17 @@ func TestDisplaySessionHeader(t *testing.T) {
 
 func TestDisplayMessage(t *testing.T) {
 	tests := []struct {
-		name    string
-		index   int
-		msg     internal.Message
-		total   int
+		name  string
+		index int
+		msg   internal.Message
+		total int
 	}{
 		{
 			name:  "user message",
 			index: 1,
 			msg: internal.Message{
-				Actor:    "user",
-				Content:  "Hello, world!",
+				Actor:     "user",
+				Content:   "Hello, world!",
 				Timestamp: time.Now().Format(time.RFC3339),
 			},
 			total: 2,
@@ -143,8 +143,8 @@ func TestDisplayMessage(t *testing.T) {
 			name:  "assistant message",
 			index: 2,
 			msg: internal.Message{
-				Actor:    "assistant",
-				Content:  "Hi there!",
+				Actor:     "assistant",
+				Content:   "Hi there!",
 				Timestamp: time.Now().Format(time.RFC3339),
 			},
 			total: 2,
@@ -153,8 +153,8 @@ func TestDisplayMessage(t *testing.T) {
 			name:  "empty message",
 			index: 1,
 			msg: internal.Message{
-				Actor:    "user",
-				Content:  "",
+				Actor:     "user",
+				Content:   "",
 				Timestamp: time.Now().Format(time.RFC3339),
 			},
 			total: 1,
@@ -172,8 +172,8 @@ func TestDisplayMessage(t *testing.T) {
 			name:  "message with invalid timestamp",
 			index: 1,
 			msg: internal.Message{
-				Actor:    "user",
-				Content:  "Hello",
+				Actor:     "user",
+				Content:   "Hello",
 				Timestamp: "invalid-timestamp",
 			},
 			total: 1,
@@ -199,39 +199,39 @@ func TestDisplayMessage(t *testing.T) {
 
 func TestWrapText(t *testing.T) {
 	tests := []struct {
-		name     string
-		text     string
-		width    int
+		name        string
+		text        string
+		width       int
 		wantContain string
 	}{
 		{
-			name:     "short text",
-			text:     "Hello world",
-			width:    80,
+			name:        "short text",
+			text:        "Hello world",
+			width:       80,
 			wantContain: "Hello world",
 		},
 		{
-			name:     "long text",
-			text:     "This is a very long line of text that should be wrapped when it exceeds the specified width limit",
-			width:    20,
+			name:        "long text",
+			text:        "This is a very long line of text that should be wrapped when it exceeds the specified width limit",
+			width:       20,
 			wantContain: "This is a very",
 		},
 		{
-			name:     "text with newlines",
-			text:     "Line 1\nLine 2\nLine 3",
-			width:    80,
+			name:        "text with newlines",
+			text:        "Line 1\nLine 2\nLine 3",
+			width:       80,
 			wantContain: "Line 1",
 		},
 		{
-			name:     "empty text",
-			text:     "",
-			width:    80,
+			name:        "empty text",
+			text:        "",
+			width:       80,
 			wantContain: "",
 		},
 		{
-			name:     "single long word",
-			text:     "supercalifragilisticexpialidocious",
-			width:    10,
+			name:        "single long word",
+			text:        "supercalifragilisticexpialidocious",
+			width:       10,
 			wantContain: "supercalifragilisticexpialidocious",
 		},
 	}
@@ -247,4 +247,3 @@ func TestWrapText(t *testing.T) {
 		})
 	}
 }
-

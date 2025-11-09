@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "modernc.org/sqlite"
 	"github.com/iksnae/cursor-session/testutil"
+	_ "modernc.org/sqlite"
 )
 
 func TestQueryBlobsTable(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create blobs table with key-value structure
 	createTableSQL := `
@@ -52,7 +52,7 @@ func TestQueryBlobsTable(t *testing.T) {
 
 func TestQueryBlobsTable_NoTable(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Don't create blobs table
 	blobs, err := QueryBlobsTable(db)
@@ -67,7 +67,7 @@ func TestQueryBlobsTable_NoTable(t *testing.T) {
 
 func TestQueryMetaTable(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create meta table
 	createTableSQL := `
@@ -107,7 +107,7 @@ func TestQueryMetaTable(t *testing.T) {
 
 func TestQueryMetaTable_NoTable(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Don't create meta table
 	meta, err := QueryMetaTable(db)
@@ -129,7 +129,7 @@ func TestLoadSessionFromStoreDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create blobs table
 	createBlobsSQL := `
@@ -169,7 +169,7 @@ func TestLoadSessionFromStoreDB(t *testing.T) {
 		t.Fatalf("Failed to insert context: %v", err)
 	}
 
-	db.Close()
+	_ = db.Close()
 
 	// Load session
 	bubbles, composers, contexts, err := LoadSessionFromStoreDB(dbPath)
@@ -241,7 +241,7 @@ func TestLoadAllSessionsFromAgentStorage(t *testing.T) {
 	if _, err := db1.Exec(insertSQL, "bubble1", `{"bubbleId":"bubble1","chatId":"chat1","text":"Hello","timestamp":1000,"type":1}`); err != nil {
 		t.Fatalf("Failed to insert data: %v", err)
 	}
-	db1.Close()
+	_ = db1.Close()
 
 	// Create second database
 	db2, err := sql.Open("sqlite", dbPath2)
@@ -254,7 +254,7 @@ func TestLoadAllSessionsFromAgentStorage(t *testing.T) {
 	if _, err := db2.Exec(insertSQL, "bubble2", `{"bubbleId":"bubble2","chatId":"chat2","text":"Hi","timestamp":2000,"type":2}`); err != nil {
 		t.Fatalf("Failed to insert data: %v", err)
 	}
-	db2.Close()
+	_ = db2.Close()
 
 	// Load all sessions
 	reader := NewAgentStorageReader([]string{dbPath1, dbPath2})
@@ -308,11 +308,11 @@ func TestExtractSessionIDFromPath(t *testing.T) {
 
 func TestParseBubbleFromData(t *testing.T) {
 	data := map[string]interface{}{
-		"bubbleId": "bubble1",
-		"chatId":   "chat1",
-		"text":     "Hello",
+		"bubbleId":  "bubble1",
+		"chatId":    "chat1",
+		"text":      "Hello",
 		"timestamp": float64(1000),
-		"type":     float64(1),
+		"type":      float64(1),
 	}
 
 	bubble, err := parseBubbleFromData("key", data, "session1")
@@ -335,9 +335,9 @@ func TestParseBubbleFromData(t *testing.T) {
 
 func TestParseComposerFromData(t *testing.T) {
 	data := map[string]interface{}{
-		"composerId": "composer1",
-		"name":       "Test Conversation",
-		"createdAt":  float64(1000),
+		"composerId":    "composer1",
+		"name":          "Test Conversation",
+		"createdAt":     float64(1000),
 		"lastUpdatedAt": float64(2000),
 	}
 
@@ -379,4 +379,3 @@ func TestParseContextFromData(t *testing.T) {
 		t.Errorf("parseContextFromData() ComposerID = %q, want %q", context.ComposerID, "composer1")
 	}
 }
-

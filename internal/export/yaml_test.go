@@ -83,5 +83,3 @@ func TestYAMLExporter_Extension(t *testing.T) {
 		t.Errorf("YAMLExporter.Extension() = %v, want yaml", got)
 	}
 }
-
-

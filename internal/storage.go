@@ -205,7 +205,7 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 	errMsg.WriteString("no Cursor storage found\n\n")
 	errMsg.WriteString("Checked storage locations:\n")
 	errMsg.WriteString(fmt.Sprintf("  • Desktop app: %s (not found)\n", paths.GetGlobalStorageDBPath()))
-	
+
 	if agentStorageChecked {
 		if paths.AgentStoragePath != "" {
 			errMsg.WriteString(fmt.Sprintf("  • Agent CLI: %s (directory exists but no store.db files found)\n", paths.AgentStoragePath))
@@ -222,7 +222,7 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 			errMsg.WriteString("  • Agent CLI: not available on this platform\n")
 		}
 	}
-	
+
 	// Check if we're in a CI environment
 	if IsCIEnvironment() {
 		errMsg.WriteString("\n")
@@ -238,7 +238,7 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 		errMsg.WriteString("  • Cursor IDE desktop app with chat history, or\n")
 		errMsg.WriteString("  • cursor-agent CLI with active sessions in ~/.config/cursor/chats/ or ~/.cursor/chats/\n")
 	}
-	
+
 	return nil, fmt.Errorf("%s", errMsg.String())
 }
 
@@ -246,23 +246,23 @@ func NewStorageBackend(paths StoragePaths) (StorageBackend, error) {
 func IsCIEnvironment() bool {
 	// Check common CI environment variables
 	ciVars := []string{
-		"CI",                    // Generic CI indicator
-		"GITHUB_ACTIONS",        // GitHub Actions
-		"GITLAB_CI",             // GitLab CI
-		"JENKINS_URL",           // Jenkins
-		"CIRCLECI",              // CircleCI
-		"TRAVIS",                // Travis CI
-		"BUILDKITE",             // Buildkite
-		"TEAMCITY_VERSION",      // TeamCity
-		"TF_BUILD",              // Azure DevOps
-		"bamboo_buildKey",       // Bamboo
+		"CI",               // Generic CI indicator
+		"GITHUB_ACTIONS",   // GitHub Actions
+		"GITLAB_CI",        // GitLab CI
+		"JENKINS_URL",      // Jenkins
+		"CIRCLECI",         // CircleCI
+		"TRAVIS",           // Travis CI
+		"BUILDKITE",        // Buildkite
+		"TEAMCITY_VERSION", // TeamCity
+		"TF_BUILD",         // Azure DevOps
+		"bamboo_buildKey",  // Bamboo
 	}
-	
+
 	for _, envVar := range ciVars {
 		if os.Getenv(envVar) != "" {
 			return true
 		}
 	}
-	
+
 	return false
 }

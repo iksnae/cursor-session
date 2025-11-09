@@ -137,7 +137,7 @@ func TestCacheManager_IsCacheValid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean up previous cache
-			os.Remove(cm.GetIndexPath())
+			_ = os.Remove(cm.GetIndexPath())
 			tt.setup()
 
 			got, err := cm.IsCacheValid(dbPath)
@@ -164,7 +164,7 @@ func TestCacheManager_SaveAndLoadIndex(t *testing.T) {
 			{
 				ID:           "session1",
 				ComposerID:   "composer1",
-				Name:        "Test Session",
+				Name:         "Test Session",
 				MessageCount: 5,
 			},
 		},
@@ -515,5 +515,3 @@ func TestParseTimestamp(t *testing.T) {
 		})
 	}
 }
-
-

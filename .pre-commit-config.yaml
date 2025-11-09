@@ -1,20 +1,22 @@
 repos:
-  # Go formatting
+  # Go formatting and vetting
   - repo: https://github.com/dnephin/pre-commit-golang
     rev: v0.5.1
     hooks:
       - id: go-fmt
         args: [-w]
       - id: go-vet
-      - id: go-lint
-        args: [--timeout=5m]
 
-  # golangci-lint (matches CI configuration)
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.60.0
+  # golangci-lint - using system-installed version
+  - repo: local
     hooks:
       - id: golangci-lint
-        args: [--timeout=5m]
+        name: golangci-lint
+        entry: bash -c 'golangci-lint run --timeout=5m ./...'
+        language: system
+        types: [go]
+        pass_filenames: false
+        always_run: false
 
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -25,4 +27,3 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=1000']
-

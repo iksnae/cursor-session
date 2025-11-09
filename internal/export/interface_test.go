@@ -6,11 +6,11 @@ import (
 
 func TestNewExporter(t *testing.T) {
 	tests := []struct {
-		name      string
-		format    string
-		wantType  string
-		wantExt   string
-		wantErr   bool
+		name     string
+		format   string
+		wantType string
+		wantExt  string
+		wantErr  bool
 	}{
 		{
 			name:     "jsonl format",
@@ -109,5 +109,3 @@ func TestNewExporter(t *testing.T) {
 		})
 	}
 }
-
-

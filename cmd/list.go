@@ -42,8 +42,8 @@ var (
 			Foreground(lipgloss.Color("243"))
 
 	workspaceStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("135")).
-		Italic(true)
+			Foreground(lipgloss.Color("135")).
+			Italic(true)
 )
 
 var listCmd = &cobra.Command{
@@ -159,8 +159,8 @@ func displaySessionsFromComposers(composers []*internal.RawComposer) {
 	w := tabwriter.NewWriter(lipgloss.DefaultRenderer().Output(), 0, 0, 3, ' ', tabwriter.AlignRight)
 
 	// Header row - cleaner format
-	fmt.Fprintln(w, titleStyle.Render("ID")+"\t"+titleStyle.Render("Name")+"\t"+titleStyle.Render("Messages")+"\t"+titleStyle.Render("Created")+"\t")
-	fmt.Fprintln(w, strings.Repeat("─", 100))
+	_, _ = fmt.Fprintln(w, titleStyle.Render("ID")+"\t"+titleStyle.Render("Name")+"\t"+titleStyle.Render("Messages")+"\t"+titleStyle.Render("Created")+"\t")
+	_, _ = fmt.Fprintln(w, strings.Repeat("─", 100))
 
 	for _, composer := range composers {
 		name := composer.Name
@@ -205,14 +205,14 @@ func displaySessionsFromComposers(composers []*internal.RawComposer) {
 		}
 		id := idStyle.Render(shortID)
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t\n", id, name, msgCount, created)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t\n", id, name, msgCount, created)
 	}
 
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 	if len(composers) > 0 {
-		fmt.Println(idStyle.Render("💡 Tip: Use the full ID (e.g., ") + 
-			lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(composers[0].ComposerID) + 
+		fmt.Println(idStyle.Render("💡 Tip: Use the full ID (e.g., ") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(composers[0].ComposerID) +
 			idStyle.Render(") with `cursor-session show <id>`"))
 	}
 }
@@ -231,8 +231,8 @@ func displaySessionsFromIndex(index *internal.SessionIndex) {
 	w := tabwriter.NewWriter(lipgloss.DefaultRenderer().Output(), 0, 0, 3, ' ', tabwriter.AlignRight)
 
 	// Header row - cleaner format
-	fmt.Fprintln(w, titleStyle.Render("ID")+"\t"+titleStyle.Render("Name")+"\t"+titleStyle.Render("Messages")+"\t"+titleStyle.Render("Created")+"\t"+titleStyle.Render("Workspace")+"\t")
-	fmt.Fprintln(w, strings.Repeat("─", 120))
+	_, _ = fmt.Fprintln(w, titleStyle.Render("ID")+"\t"+titleStyle.Render("Name")+"\t"+titleStyle.Render("Messages")+"\t"+titleStyle.Render("Created")+"\t"+titleStyle.Render("Workspace")+"\t")
+	_, _ = fmt.Fprintln(w, strings.Repeat("─", 120))
 
 	for _, entry := range index.Sessions {
 		name := entry.Name
@@ -295,14 +295,14 @@ func displaySessionsFromIndex(index *internal.SessionIndex) {
 		}
 		id := idStyle.Render(shortID)
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t\n", id, name, msgCount, created, workspace)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t\n", id, name, msgCount, created, workspace)
 	}
 
-	w.Flush()
+	_ = w.Flush()
 	fmt.Println()
 	if len(index.Sessions) > 0 {
-		fmt.Println(idStyle.Render("💡 Tip: Use the full ID (e.g., ") + 
-			lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(index.Sessions[0].ComposerID) + 
+		fmt.Println(idStyle.Render("💡 Tip: Use the full ID (e.g., ") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color("62")).Render(index.Sessions[0].ComposerID) +
 			idStyle.Render(") with `cursor-session show <id>`"))
 	}
 }

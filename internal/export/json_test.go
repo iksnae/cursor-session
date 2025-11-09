@@ -88,5 +88,3 @@ func TestJSONExporter_Extension(t *testing.T) {
 		t.Errorf("JSONExporter.Extension() = %v, want json", got)
 	}
 }
-
-

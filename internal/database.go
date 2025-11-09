@@ -22,7 +22,7 @@ func OpenDatabase(path string) (*sql.DB, error) {
 
 	// Test connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("database ping failed: %w", err)
 	}
 
@@ -36,7 +36,7 @@ func QueryCursorDiskKV(db *sql.DB, pattern string) ([]KeyValuePair, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var pairs []KeyValuePair
 	for rows.Next() {

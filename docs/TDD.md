@@ -10,7 +10,7 @@
 
 ## 1. Purpose
 
-The purpose of this document is to define the **technical architecture, design decisions, and implementation strategy** for the `cursor-session` CLI.  
+The purpose of this document is to define the **technical architecture, design decisions, and implementation strategy** for the `cursor-session` CLI.
 This tool will enable cross-platform (macOS + Linux) discovery, extraction, and export of **Cursor Editor chat sessions**, unifying legacy (SQLite-based) and modern (CacheStorage-based) data into structured session logs.
 
 The system forms part of the **Khaos Machine developer observability layer**, allowing Cursor Agent and chat histories to be indexed, analyzed, and merged with other agent session data (tool calls, reasoning traces, etc.).
@@ -73,7 +73,7 @@ Local FS paths Exported session archives
 
 ### 5.1 CLI Layer (`cmd/`)
 
-Implements user-facing commands via **Cobra**.  
+Implements user-facing commands via **Cobra**.
 Each subcommand maps to an operation in the core package.
 
 | Command  | Description                                    |
@@ -187,7 +187,7 @@ content string Message text
 
 # Session <ID>
 
-**user:** What is Cursor?  
+**user:** What is Cursor?
 **assistant:** Cursor is an AI coding editor...
 
 ⸻

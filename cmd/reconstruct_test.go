@@ -37,7 +37,3 @@ func TestReconstructCommand_FlagParsing(t *testing.T) {
 		})
 	}
 }
-
-
-
-

@@ -22,7 +22,7 @@ func CreateInMemoryDB(t *testing.T) *sql.DB {
 		value TEXT
 	)`
 	if _, err := db.Exec(createTableSQL); err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("Failed to create cursorDiskKV table: %v", err)
 	}
 
@@ -83,28 +83,30 @@ func CreateTestDB(t *testing.T) *sql.DB {
 	insertSQL := "INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)"
 	stmt, err := db.Prepare(insertSQL)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatalf("Failed to prepare insert statement: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		_ = stmt.Close()
+	}()
 
 	for _, bubble := range bubbles {
 		if _, err := stmt.Exec(bubble.key, bubble.value); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("Failed to insert bubble: %v", err)
 		}
 	}
 
 	for _, composer := range composers {
 		if _, err := stmt.Exec(composer.key, composer.value); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("Failed to insert composer: %v", err)
 		}
 	}
 
 	for _, ctx := range contexts {
 		if _, err := stmt.Exec(ctx.key, ctx.value); err != nil {
-			db.Close()
+			_ = db.Close()
 			t.Fatalf("Failed to insert context: %v", err)
 		}
 	}

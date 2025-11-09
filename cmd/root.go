@@ -58,7 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().StringVar(&storagePath, "storage", "", "Custom storage location (path to database file or storage directory)")
 	rootCmd.PersistentFlags().BoolVar(&copyDB, "copy", false, "Copy database files to temporary location to avoid locking issues")
-	
+
 	// Set version template to ensure --version flag works
 	rootCmd.SetVersionTemplate(`{{printf "%s\n" .Version}}`)
 }

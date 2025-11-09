@@ -13,7 +13,7 @@ type YAMLExporter struct{}
 // Export exports a session to YAML format
 func (e *YAMLExporter) Export(session *internal.Session, w io.Writer) error {
 	enc := yaml.NewEncoder(w)
-	defer enc.Close()
+	defer func() { _ = enc.Close() }()
 
 	return enc.Encode(session)
 }

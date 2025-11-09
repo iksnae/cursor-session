@@ -52,7 +52,7 @@ func ExtractTextFromBubble(bubble *RawBubble) (string, error) {
 
 	// Combine all parts
 	result := strings.Join(textParts, "\n\n")
-	
+
 	// If we still have no text, return a placeholder to indicate the message exists
 	if result == "" {
 		return "[Message with no extractable text content]", nil
@@ -68,18 +68,18 @@ func extractFallbackText(jsonStr string) string {
 	// This is a simple heuristic - look for "text":"..." patterns
 	var result strings.Builder
 	escapeNext := false
-	
+
 	for i := 0; i < len(jsonStr)-6; i++ {
 		if escapeNext {
 			escapeNext = false
 			continue
 		}
-		
+
 		if jsonStr[i] == '\\' {
 			escapeNext = true
 			continue
 		}
-		
+
 		// Look for "text": pattern
 		if i+6 < len(jsonStr) && jsonStr[i:i+6] == `"text"` {
 			// Skip to the value
@@ -109,7 +109,7 @@ func extractFallbackText(jsonStr string) string {
 			}
 		}
 	}
-	
+
 	return strings.TrimSpace(result.String())
 }
 
@@ -119,23 +119,23 @@ func extractFromRawJSON(jsonStr string) string {
 	// Look for: "content", "value", "message", "text", "thinking", "tool"
 	patterns := []string{`"content"`, `"value"`, `"message"`, `"text"`, `"thinking"`, `"tool"`, `"name"`, `"description"`}
 	var result strings.Builder
-	
+
 	for _, pattern := range patterns {
 		idx := strings.Index(jsonStr, pattern)
 		if idx == -1 {
 			continue
 		}
-		
+
 		// Skip to the value after the pattern
 		start := idx + len(pattern)
 		for start < len(jsonStr) && (jsonStr[start] == ' ' || jsonStr[start] == ':') {
 			start++
 		}
-		
+
 		if start >= len(jsonStr) {
 			continue
 		}
-		
+
 		// Extract string value
 		if jsonStr[start] == '"' {
 			start++
@@ -163,6 +163,6 @@ func extractFromRawJSON(jsonStr string) string {
 			}
 		}
 	}
-	
+
 	return strings.TrimSpace(result.String())
 }

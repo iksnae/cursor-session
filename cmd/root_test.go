@@ -77,4 +77,3 @@ func TestExecute(t *testing.T) {
 		t.Error("Execute() should return error for nonexistent command")
 	}
 }
-

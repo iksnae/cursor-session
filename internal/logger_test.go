@@ -58,5 +58,3 @@ func TestLogLevels(t *testing.T) {
 		t.Error("LogLevelInfo should be less than LogLevelDebug")
 	}
 }
-
-

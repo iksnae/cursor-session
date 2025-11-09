@@ -78,14 +78,15 @@ func TestDetectStoragePaths_AgentStoragePath(t *testing.T) {
 		t.Fatalf("DetectStoragePaths() error = %v", err)
 	}
 
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		// On Linux, AgentStoragePath should be set
 		home, _ := os.UserHomeDir()
 		expected := filepath.Join(home, ".cursor/chats")
 		if paths.AgentStoragePath != expected {
 			t.Errorf("AgentStoragePath = %v, want %v", paths.AgentStoragePath, expected)
 		}
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		// On macOS, AgentStoragePath should be empty
 		if paths.AgentStoragePath != "" {
 			t.Errorf("AgentStoragePath = %v, want empty string on macOS", paths.AgentStoragePath)
@@ -158,4 +159,3 @@ func TestFindAgentStoreDBs(t *testing.T) {
 		}
 	}
 }
-

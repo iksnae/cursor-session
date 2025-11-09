@@ -14,20 +14,20 @@ type MarkdownExporter struct{}
 // Export exports a session to Markdown format
 func (e *MarkdownExporter) Export(session *internal.Session, w io.Writer) error {
 	// Header
-	fmt.Fprintf(w, "# Session %s\n\n", session.ID)
+	_, _ = fmt.Fprintf(w, "# Session %s\n\n", session.ID)
 
 	if session.Workspace != "" {
-		fmt.Fprintf(w, "**Workspace:** %s  \n", session.Workspace)
+		_, _ = fmt.Fprintf(w, "**Workspace:** %s  \n", session.Workspace)
 	}
-	fmt.Fprintf(w, "**Source:** %s  \n", session.Source)
-	fmt.Fprintf(w, "**Messages:** %d\n\n", len(session.Messages))
+	_, _ = fmt.Fprintf(w, "**Source:** %s  \n", session.Source)
+	_, _ = fmt.Fprintf(w, "**Messages:** %d\n\n", len(session.Messages))
 
 	if session.Metadata.Name != "" {
-		fmt.Fprintf(w, "**Name:** %s\n\n", session.Metadata.Name)
+		_, _ = fmt.Fprintf(w, "**Name:** %s\n\n", session.Metadata.Name)
 	}
 
-	fmt.Fprintf(w, "---\n\n")
-	fmt.Fprintf(w, "## Messages\n\n")
+	_, _ = fmt.Fprintf(w, "---\n\n")
+	_, _ = fmt.Fprintf(w, "## Messages\n\n")
 
 	// Messages
 	for _, msg := range session.Messages {
@@ -39,7 +39,7 @@ func (e *MarkdownExporter) Export(session *internal.Session, w io.Writer) error 
 		// Escape markdown in content if needed
 		content := escapeMarkdown(msg.Content)
 
-		fmt.Fprintf(w, "**%s:**%s\n\n%s\n\n", msg.Actor, timestamp, content)
+		_, _ = fmt.Fprintf(w, "**%s:**%s\n\n%s\n\n", msg.Actor, timestamp, content)
 	}
 
 	return nil

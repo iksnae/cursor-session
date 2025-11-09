@@ -31,22 +31,22 @@ func TestCopyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(srcFile.Name())
-	defer srcFile.Close()
+	defer func() { _ = os.Remove(srcFile.Name()) }()
+	defer func() { _ = srcFile.Close() }()
 
 	// Write test content
 	testContent := "test content"
 	if _, err := srcFile.WriteString(testContent); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	srcFile.Close()
+	_ = srcFile.Close()
 
 	dstFile, err := os.CreateTemp("", "test-dst-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(dstFile.Name())
-	dstFile.Close()
+	defer func() { _ = os.Remove(dstFile.Name()) }()
+	_ = dstFile.Close()
 
 	tests := []struct {
 		name    string
@@ -77,7 +77,3 @@ func TestCopyFile(t *testing.T) {
 		})
 	}
 }
-
-
-
-

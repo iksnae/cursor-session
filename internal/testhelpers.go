@@ -75,4 +75,3 @@ func CreateTestMessageContext(bubbleID, composerID, contextID string) *MessageCo
 		ContextID:  contextID,
 	}
 }
-

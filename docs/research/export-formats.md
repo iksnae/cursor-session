@@ -92,8 +92,8 @@ Example: `session_2025-11-07T14-23-01Z.jsonl`
 ```markdown
 # Session {session-id}
 
-**Workspace:** {workspace-path}  
-**Source:** {source}  
+**Workspace:** {workspace-path}
+**Source:** {source}
 **Messages:** {count}
 
 ---
@@ -180,8 +180,8 @@ func escapeMarkdown(text string) string {
 ```markdown
 # Session session_2025-11-07_a1b2c3d4
 
-**Workspace:** /Users/k/Projects/my-app  
-**Source:** sqlite  
+**Workspace:** /Users/k/Projects/my-app
+**Source:** sqlite
 **Messages:** 4
 
 ---

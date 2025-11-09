@@ -10,8 +10,8 @@ import (
 type RichTextNode struct {
 	Type     string         `json:"type"`
 	Text     string         `json:"text,omitempty"`
-	Content  string         `json:"content,omitempty"`  // Some nodes may have content field
-	Value    string         `json:"value,omitempty"`    // Some nodes may have value field
+	Content  string         `json:"content,omitempty"` // Some nodes may have content field
+	Value    string         `json:"value,omitempty"`   // Some nodes may have value field
 	Children []RichTextNode `json:"children,omitempty"`
 }
 

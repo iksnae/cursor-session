@@ -22,27 +22,27 @@ var (
 
 var (
 	snoopSuccessStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("42")).
-		Bold(true)
+				Foreground(lipgloss.Color("42")).
+				Bold(true)
 
 	snoopWarningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("214")).
-		Bold(true)
+				Foreground(lipgloss.Color("214")).
+				Bold(true)
 
 	snoopErrorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("196")).
-		Bold(true)
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
 
 	snoopInfoStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39"))
+			Foreground(lipgloss.Color("39"))
 
 	snoopSectionStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("62")).
-		Bold(true).
-		Underline(true)
+				Foreground(lipgloss.Color("62")).
+				Bold(true).
+				Underline(true)
 
 	snoopPathStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("243"))
+			Foreground(lipgloss.Color("243"))
 )
 
 // snoopCmd represents the snoop command
@@ -79,10 +79,10 @@ which can help seed the database if it doesn't exist yet.`,
 				// Give it time to create the database - cursor-agent may need a moment
 				fmt.Println(snoopInfoStyle.Render("   Waiting for database to be created..."))
 				time.Sleep(5 * time.Second)
-				
+
 				// Re-check paths after waiting to see if database was created
 				fmt.Println(snoopInfoStyle.Render("   Re-checking paths after database creation..."))
-				
+
 				// Force a fresh path detection after cursor-agent runs
 				// This ensures we pick up any newly created directories
 				time.Sleep(2 * time.Second)
@@ -116,7 +116,7 @@ which can help seed the database if it doesn't exist yet.`,
 				}
 			}
 			displayPathInfo(paths)
-			
+
 			// If --hello was used and we still don't see agent storage, check if directory was just created
 			if snoopHello && !paths.HasAgentStorage() && paths.AgentStoragePath != "" {
 				// Give it one more moment and check again
@@ -160,21 +160,21 @@ func displayPathInfo(paths internal.StoragePaths) {
 	fmt.Printf("  %s\n", snoopPathStyle.Render(paths.GlobalStorage))
 	checkPath(paths.GlobalStorage, "  ")
 
-		// Check for state.vscdb in globalStorage
-		dbPath := paths.GetGlobalStorageDBPath()
-		fmt.Printf("  Database: %s\n", snoopPathStyle.Render(dbPath))
-		if paths.GlobalStorageExists() {
-			fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database file exists"))
-			// Try to open it
-			if db, err := internal.OpenDatabase(dbPath); err == nil {
-				db.Close()
-				fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database is accessible"))
-			} else {
-				fmt.Printf("%s ⚠️  Database exists but cannot be opened: %v\n", snoopWarningStyle.Render("  "), err)
-			}
+	// Check for state.vscdb in globalStorage
+	dbPath := paths.GetGlobalStorageDBPath()
+	fmt.Printf("  Database: %s\n", snoopPathStyle.Render(dbPath))
+	if paths.GlobalStorageExists() {
+		fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database file exists"))
+		// Try to open it
+		if db, err := internal.OpenDatabase(dbPath); err == nil {
+			_ = db.Close()
+			fmt.Printf("  %s\n", snoopSuccessStyle.Render("✅ Database is accessible"))
 		} else {
-			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Database file does not exist"))
+			fmt.Printf("%s ⚠️  Database exists but cannot be opened: %v\n", snoopWarningStyle.Render("  "), err)
 		}
+	} else {
+		fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Database file does not exist"))
+	}
 
 	fmt.Println()
 	fmt.Println(snoopInfoStyle.Render("Workspace Storage:"))
@@ -209,7 +209,7 @@ func displayPathInfo(paths internal.StoragePaths) {
 		filepath.Join(home, ".config/cursor/chats"), // Newer location (CI/GH workflows)
 		filepath.Join(home, ".cursor/chats"),        // Older location (local installs)
 	}
-	
+
 	foundAgentStorage := false
 	for _, agentPath := range agentStoragePaths {
 		fmt.Printf("  %s\n", snoopPathStyle.Render(agentPath))
@@ -239,7 +239,7 @@ func displayPathInfo(paths internal.StoragePaths) {
 			fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  Does not exist"))
 		}
 	}
-	
+
 	if !foundAgentStorage && runtime.GOOS == "linux" {
 		fmt.Printf("  %s\n", snoopWarningStyle.Render("⚠️  No agent storage directories found"))
 	} else if runtime.GOOS != "linux" {
@@ -323,9 +323,9 @@ func deepSearchForDatabases() {
 	// Priority: .config/cursor/chats (newer location used in CI/GH workflows) then .cursor/chats
 	cursorChatsDirs := []string{
 		filepath.Join(home, ".config", "cursor", "chats"), // Newer location (CI/GH workflows)
-		filepath.Join(home, ".cursor", "chats"),            // Older location (local installs)
+		filepath.Join(home, ".cursor", "chats"),           // Older location (local installs)
 	}
-	
+
 	for _, cursorChatsDir := range cursorChatsDirs {
 		if info, err := os.Stat(cursorChatsDir); err == nil && info.IsDir() {
 			// Walk the chats directory looking for store.db files
@@ -524,7 +524,7 @@ func triggerCursorAgentHello() (string, error) {
 
 	// Check if CURSOR_API_KEY is set (for non-interactive authentication)
 	hasAPIKey := os.Getenv("CURSOR_API_KEY") != ""
-	
+
 	// Only check authentication status if no API key is set
 	// (API key authentication doesn't require interactive login)
 	if !hasAPIKey {
@@ -536,9 +536,9 @@ func triggerCursorAgentHello() (string, error) {
 		if err := checkCmd.Run(); err != nil {
 			// If status check fails, it might mean not authenticated
 			stderrStr := checkStderr.String()
-			if strings.Contains(stderrStr, "Authentication required") || 
-			   strings.Contains(stderrStr, "login") ||
-			   strings.Contains(stderrStr, "not authenticated") {
+			if strings.Contains(stderrStr, "Authentication required") ||
+				strings.Contains(stderrStr, "login") ||
+				strings.Contains(stderrStr, "not authenticated") {
 				return foundLocation, fmt.Errorf("cursor-agent found at %s but requires authentication (run 'cursor-agent login' or set CURSOR_API_KEY environment variable)", foundLocation)
 			}
 			// Other errors - continue anyway, might still work
@@ -552,7 +552,7 @@ func triggerCursorAgentHello() (string, error) {
 
 	cmd := exec.CommandContext(ctx, cursorAgentPath, "-p", "hello", "--model", "auto", "--print")
 	cmd.Env = os.Environ()
-	
+
 	// Capture stderr to detect authentication errors
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -571,21 +571,21 @@ func triggerCursorAgentHello() (string, error) {
 	}()
 
 	select {
-		case err := <-done:
-			if err != nil {
-				// Check if it's an authentication error
-				stderrStr := stderr.String()
-				if strings.Contains(stderrStr, "Authentication required") || 
-				   strings.Contains(stderrStr, "login") ||
-				   strings.Contains(stderrStr, "CURSOR_API_KEY") {
-					return foundLocation, fmt.Errorf("cursor-agent requires authentication: %w (run 'cursor-agent login' or set CURSOR_API_KEY)", err)
-				}
-				// Other errors might still allow database creation, so don't fail completely
-				return foundLocation, nil
+	case err := <-done:
+		if err != nil {
+			// Check if it's an authentication error
+			stderrStr := stderr.String()
+			if strings.Contains(stderrStr, "Authentication required") ||
+				strings.Contains(stderrStr, "login") ||
+				strings.Contains(stderrStr, "CURSOR_API_KEY") {
+				return foundLocation, fmt.Errorf("cursor-agent requires authentication: %w (run 'cursor-agent login' or set CURSOR_API_KEY)", err)
 			}
-		case <-ctx.Done():
-			// Timeout reached, but that's okay - the process might still be creating the database
-			_ = cmd.Process.Kill()
+			// Other errors might still allow database creation, so don't fail completely
+			return foundLocation, nil
+		}
+	case <-ctx.Done():
+		// Timeout reached, but that's okay - the process might still be creating the database
+		_ = cmd.Process.Kill()
 	}
 
 	return foundLocation, nil
@@ -595,4 +595,3 @@ func init() {
 	rootCmd.AddCommand(snoopCmd)
 	snoopCmd.Flags().BoolVar(&snoopHello, "hello", false, "Invoke cursor-agent with a simple prompt to seed the database")
 }
-

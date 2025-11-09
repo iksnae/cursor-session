@@ -283,5 +283,3 @@ func TestParseRawComposer_InvalidKey(t *testing.T) {
 		})
 	}
 }
-
-

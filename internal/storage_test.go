@@ -10,7 +10,7 @@ import (
 
 func TestNewStorage(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	storage := NewStorage(db)
 	// NewStorage always returns a non-nil pointer
@@ -22,7 +22,7 @@ func TestNewStorage(t *testing.T) {
 
 func TestStorage_LoadBubbles(t *testing.T) {
 	db := testutil.CreateTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	storage := NewStorage(db)
 	bubbles, err := storage.LoadBubbles()
@@ -47,7 +47,7 @@ func TestStorage_LoadBubbles(t *testing.T) {
 
 func TestStorage_LoadBubbles_InvalidData(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert invalid bubble data
 	testutil.InsertBubble(t, db, "bubbleId:chat1:invalid", "not valid json")
@@ -66,7 +66,7 @@ func TestStorage_LoadBubbles_InvalidData(t *testing.T) {
 
 func TestStorage_LoadComposers(t *testing.T) {
 	db := testutil.CreateTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	storage := NewStorage(db)
 	composers, err := storage.LoadComposers()
@@ -88,7 +88,7 @@ func TestStorage_LoadComposers(t *testing.T) {
 
 func TestStorage_LoadComposers_InvalidData(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert invalid composer data
 	testutil.InsertComposer(t, db, "composerData:invalid", "not valid json")
@@ -107,7 +107,7 @@ func TestStorage_LoadComposers_InvalidData(t *testing.T) {
 
 func TestStorage_LoadMessageContexts(t *testing.T) {
 	db := testutil.CreateTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	storage := NewStorage(db)
 	contexts, err := storage.LoadMessageContexts()
@@ -134,7 +134,7 @@ func TestStorage_LoadMessageContexts(t *testing.T) {
 
 func TestStorage_LoadMessageContexts_InvalidData(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert invalid context data
 	testutil.InsertBubble(t, db, "messageRequestContext:composer1:invalid", "not valid json")
@@ -153,7 +153,7 @@ func TestStorage_LoadMessageContexts_InvalidData(t *testing.T) {
 
 func TestStorage_LoadCodeBlockDiffs(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert code block diff data
 	diffData := `{"type":"diff","content":"test"}`
@@ -182,7 +182,7 @@ func TestStorage_LoadCodeBlockDiffs(t *testing.T) {
 
 func TestStorage_LoadCodeBlockDiffs_InvalidKey(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert code block diff with invalid key format
 	testutil.InsertBubble(t, db, "codeBlockDiff:invalid", `{"type":"diff"}`)
@@ -201,7 +201,7 @@ func TestStorage_LoadCodeBlockDiffs_InvalidKey(t *testing.T) {
 
 func TestStorage_LoadCodeBlockDiffs_InvalidJSON(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert code block diff with invalid JSON
 	testutil.InsertBubble(t, db, "codeBlockDiff:chat1:diff1", "not valid json")
@@ -313,39 +313,37 @@ func TestIsCIEnvironment(t *testing.T) {
 	// Save original environment
 	originalCI := os.Getenv("CI")
 	originalGHA := os.Getenv("GITHUB_ACTIONS")
-	
+
 	// Clean up after test
 	defer func() {
 		if originalCI != "" {
-			os.Setenv("CI", originalCI)
+			_ = os.Setenv("CI", originalCI)
 		} else {
-			os.Unsetenv("CI")
+			_ = os.Unsetenv("CI")
 		}
 		if originalGHA != "" {
-			os.Setenv("GITHUB_ACTIONS", originalGHA)
+			_ = os.Setenv("GITHUB_ACTIONS", originalGHA)
 		} else {
-			os.Unsetenv("GITHUB_ACTIONS")
+			_ = os.Unsetenv("GITHUB_ACTIONS")
 		}
 	}()
 
 	// Test with CI environment variable set
-	os.Setenv("CI", "true")
+	_ = os.Setenv("CI", "true")
 	if !IsCIEnvironment() {
 		t.Error("IsCIEnvironment() should return true when CI is set")
 	}
 
 	// Test with GitHub Actions environment variable set
-	os.Unsetenv("CI")
-	os.Setenv("GITHUB_ACTIONS", "true")
+	_ = os.Unsetenv("CI")
+	_ = os.Setenv("GITHUB_ACTIONS", "true")
 	if !IsCIEnvironment() {
 		t.Error("IsCIEnvironment() should return true when GITHUB_ACTIONS is set")
 	}
 
 	// Test without CI environment variables
-	os.Unsetenv("CI")
-	os.Unsetenv("GITHUB_ACTIONS")
+	_ = os.Unsetenv("CI")
+	_ = os.Unsetenv("GITHUB_ACTIONS")
 	// Note: We can't easily test false case without clearing all CI vars,
 	// but the function should work correctly
 }
-
-

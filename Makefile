@@ -66,9 +66,3 @@ help:
 	@echo "  make test-coverage      - Generate coverage profile and display summary"
 	@echo "  make test-coverage-html - Generate HTML coverage report"
 	@echo "  make test-coverage-check - Check coverage against 80% threshold"
-
-
-
-
-
-

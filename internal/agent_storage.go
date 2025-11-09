@@ -33,7 +33,7 @@ func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
 	var tableExists bool
 	err := db.QueryRow(`
 		SELECT EXISTS (
-			SELECT name FROM sqlite_master 
+			SELECT name FROM sqlite_master
 			WHERE type='table' AND name='blobs'
 		)
 	`).Scan(&tableExists)
@@ -52,7 +52,7 @@ func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get blobs table info: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []string
 	for rows.Next() {
@@ -90,7 +90,7 @@ func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query blobs table: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []BlobEntry
 	rowCount := 0
@@ -133,7 +133,7 @@ func QueryMetaTable(db *sql.DB) ([]MetaEntry, error) {
 	var tableExists bool
 	err := db.QueryRow(`
 		SELECT EXISTS (
-			SELECT name FROM sqlite_master 
+			SELECT name FROM sqlite_master
 			WHERE type='table' AND name='meta'
 		)
 	`).Scan(&tableExists)
@@ -150,7 +150,7 @@ func QueryMetaTable(db *sql.DB) ([]MetaEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get meta table info: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var columns []string
 	for rows.Next() {
@@ -185,7 +185,7 @@ func QueryMetaTable(db *sql.DB) ([]MetaEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query meta table: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []MetaEntry
 	rowCount := 0
@@ -240,7 +240,7 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to open store.db: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Query both tables
 	blobs, err := QueryBlobsTable(db)
@@ -865,7 +865,7 @@ func parseMessageToBubble(key, id, role string, data map[string]interface{}, ses
 	// Create unique bubbleID by combining message id with blob key
 	// This prevents multiple messages with the same id from overwriting each other
 	// Use first 8 chars of blob key to keep it readable
-	bubbleID := id
+	var bubbleID string
 	if len(key) >= 8 {
 		bubbleID = id + "-" + key[:8]
 	} else {
@@ -878,11 +878,12 @@ func parseMessageToBubble(key, id, role string, data map[string]interface{}, ses
 	}
 
 	// Map role to type: "user" = 1, "assistant" = 2
-	if role == "user" {
+	switch role {
+	case "user":
 		bubble.Type = 1
-	} else if role == "assistant" {
+	case "assistant":
 		bubble.Type = 2
-	} else {
+	default:
 		// Default to assistant if unknown
 		bubble.Type = 2
 	}
@@ -1116,9 +1117,10 @@ func extractJSONFromBinary(data []byte) ([]byte, bool) {
 		}
 
 		if !inString {
-			if data[i] == '{' {
+			switch data[i] {
+			case '{':
 				depth++
-			} else if data[i] == '}' {
+			case '}':
 				depth--
 				if depth == 0 {
 					// Found complete brace structure - validate it's actually valid JSON
@@ -1152,7 +1154,7 @@ func isHashLike(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
 			return false
 		}
 	}

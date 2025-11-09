@@ -2,7 +2,6 @@ package internal
 
 import (
 	"testing"
-
 )
 
 func TestNewDeduplicator(t *testing.T) {
@@ -145,5 +144,3 @@ func TestDeduplicator_hashSessionContent(t *testing.T) {
 		t.Error("hashSessionContent() should produce different hashes for different sessions")
 	}
 }
-
-

@@ -19,24 +19,24 @@ var (
 
 var (
 	successStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("42")).
-		Bold(true)
+			Foreground(lipgloss.Color("42")).
+			Bold(true)
 
 	warningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("214")).
-		Bold(true)
+			Foreground(lipgloss.Color("214")).
+			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("196")).
-		Bold(true)
+			Foreground(lipgloss.Color("196")).
+			Bold(true)
 
 	infoStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("39"))
+			Foreground(lipgloss.Color("39"))
 
 	sectionStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("62")).
-		Bold(true).
-		Underline(true)
+			Foreground(lipgloss.Color("62")).
+			Bold(true).
+			Underline(true)
 )
 
 // healthcheckCmd represents the healthcheck command
@@ -160,7 +160,7 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 			fmt.Println("Error details:")
 			fmt.Println(err)
 			fmt.Println()
-			
+
 			// Check if we're in CI
 			if internal.IsCIEnvironment() {
 				fmt.Println(infoStyle.Render("CI/CD Environment Detected"))
@@ -170,7 +170,7 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 				fmt.Println(successStyle.Render("✅ Health check passed (CI environment - no storage expected)"))
 				return nil // Exit successfully in CI when storage is not found
 			}
-			
+
 			os.Exit(1)
 		}
 		fmt.Println(successStyle.Render("✅ Storage backend initialized"))
@@ -227,7 +227,7 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 				fmt.Println("   • In CI: cursor-agent may not have created sessions yet")
 				fmt.Println()
 				fmt.Println(infoStyle.Render("Attempting to trigger session creation..."))
-				
+
 				// Try to trigger cursor-agent to create a session
 				if err := triggerCursorAgentSession(); err != nil {
 					fmt.Println(warningStyle.Render(fmt.Sprintf("   ⚠️  Could not trigger cursor-agent: %v", err)))
@@ -235,10 +235,10 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 				} else {
 					fmt.Println(successStyle.Render("   ✅ Triggered cursor-agent session creation"))
 					fmt.Println("   Waiting for session to be created...")
-					
+
 					// Wait a bit and recheck
 					time.Sleep(3 * time.Second)
-					
+
 					// Recheck storage
 					paths2, err2 := internal.GetStoragePaths(storagePath)
 					if err2 == nil {
@@ -266,7 +266,7 @@ This command is useful for debugging storage issues, especially in CI/CD environ
 		// Summary
 		fmt.Println(sectionStyle.Render("📊 Summary"))
 		fmt.Println()
-		
+
 		allGood := desktopAppExists || (agentStorageExists && len(storeDBs) > 0)
 		if allGood && sessionCount > 0 {
 			fmt.Println(successStyle.Render("✅ Health check passed!"))
@@ -329,22 +329,22 @@ func triggerCursorAgentSession() error {
 	// Use a context with timeout to avoid hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, cursorAgentPath, "--print", "hello", "--model", "auto")
 	cmd.Env = os.Environ()
-	
+
 	// Run asynchronously - we don't need to wait for completion
 	// Just starting it should trigger session creation
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start cursor-agent: %w", err)
 	}
-	
+
 	// Don't wait for completion - just let it run in background
 	// The session should be created shortly
 	go func() {
 		_ = cmd.Wait() // Clean up the process (ignore error)
 	}()
-	
+
 	return nil
 }
 
@@ -352,4 +352,3 @@ func init() {
 	rootCmd.AddCommand(healthcheckCmd)
 	healthcheckCmd.Flags().BoolVarP(&healthcheckVerbose, "verbose", "v", false, "Show detailed diagnostic information")
 }
-

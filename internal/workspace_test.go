@@ -63,7 +63,7 @@ func TestDetectWorkspaces(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean up
 			workspaceStorage := filepath.Join(basePath, "workspaceStorage")
-			os.RemoveAll(workspaceStorage)
+			_ = os.RemoveAll(workspaceStorage)
 			tt.setup()
 
 			workspaces, err := DetectWorkspaces(basePath)
@@ -138,10 +138,10 @@ func TestAssociateComposerWithWorkspace(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		composerID     string
-		contexts       []*MessageContext
-		wantWorkspace  string
+		name          string
+		composerID    string
+		contexts      []*MessageContext
+		wantWorkspace string
 	}{
 		{
 			name:          "no matching context",
@@ -154,7 +154,7 @@ func TestAssociateComposerWithWorkspace(t *testing.T) {
 			composerID: "composer1",
 			contexts: []*MessageContext{
 				{
-					ComposerID:    "composer1",
+					ComposerID:     "composer1",
 					ProjectLayouts: []string{"/path/to/workspace1"},
 				},
 			},
@@ -165,11 +165,11 @@ func TestAssociateComposerWithWorkspace(t *testing.T) {
 			composerID: "composer1",
 			contexts: []*MessageContext{
 				{
-					ComposerID:    "composer1",
+					ComposerID:     "composer1",
 					ProjectLayouts: []string{"/path/to/workspace1"},
 				},
 				{
-					ComposerID:    "composer2",
+					ComposerID:     "composer2",
 					ProjectLayouts: []string{"/path/to/workspace2"},
 				},
 			},
@@ -208,5 +208,3 @@ func TestAssociateComposerWithWorkspace(t *testing.T) {
 		})
 	}
 }
-
-

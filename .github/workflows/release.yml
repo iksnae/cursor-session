@@ -59,7 +59,7 @@ jobs:
           COMMIT: ${{ steps.commit.outputs.commit }}
         run: |
           mkdir -p dist
-          
+
           # Verify environment variables are set
           if [ -z "$VERSION" ]; then
             echo "Error: VERSION environment variable is not set!"
@@ -69,9 +69,9 @@ jobs:
             echo "Error: COMMIT environment variable is not set!"
             exit 1
           fi
-          
+
           echo "Building binaries with version=$VERSION, commit=$COMMIT"
-          
+
           for target in \
             "darwin/amd64" \
             "darwin/arm64" \
@@ -79,17 +79,17 @@ jobs:
             "linux/arm64"; do
             os=$(echo $target | cut -d'/' -f1)
             arch=$(echo $target | cut -d'/' -f2)
-            
+
             echo "Building for $os/$arch..."
-            
+
             BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
             echo "  Build date: $BUILD_DATE"
-            
+
             GOOS=$os GOARCH=$arch go build -buildvcs=false \
               -ldflags "-X 'github.com/iksnae/cursor-session/cmd.version=$VERSION' -X 'github.com/iksnae/cursor-session/cmd.commit=$COMMIT' -X 'github.com/iksnae/cursor-session/cmd.date=$BUILD_DATE'" \
               -o cursor-session \
               .
-            
+
             # Verify the binary has the correct version
             if [ "$os" = "darwin" ] && [ "$arch" = "amd64" ]; then
               # Only verify on one platform to avoid cross-platform issues
@@ -101,10 +101,10 @@ jobs:
                 echo "  Got: $BINARY_VERSION"
               fi
             fi
-            
+
             # Create archive
             tar -czf "dist/cursor-session-${VERSION}-${os}-${arch}.tar.gz" cursor-session
-            
+
             rm cursor-session
           done
 
@@ -121,25 +121,25 @@ jobs:
           name: Release v${{ steps.version.outputs.version }}
           body: |
             ## Release v${{ steps.version.outputs.version }}
-            
+
             ### Downloads
-            
+
             Download the appropriate binary for your platform:
-            
+
             - **macOS (Intel)**: `cursor-session-${{ steps.version.outputs.version }}-darwin-amd64.tar.gz`
             - **macOS (Apple Silicon)**: `cursor-session-${{ steps.version.outputs.version }}-darwin-arm64.tar.gz`
             - **Linux (x86_64)**: `cursor-session-${{ steps.version.outputs.version }}-linux-amd64.tar.gz`
             - **Linux (ARM64)**: `cursor-session-${{ steps.version.outputs.version }}-linux-arm64.tar.gz`
-            
+
             ### Installation
-            
+
             1. Download the appropriate binary for your platform
             2. Extract the archive: `tar -xzf cursor-session-*.tar.gz`
             3. Move to your PATH: `mv cursor-session ~/.local/bin/` (or `/usr/local/bin/`)
             4. Make executable: `chmod +x ~/.local/bin/cursor-session`
-            
+
             ### Verify
-            
+
             Verify the checksums:
             ```bash
             sha256sum -c checksums.txt
@@ -149,4 +149,3 @@ jobs:
             dist/checksums.txt
           draft: false
           prerelease: false
-

@@ -6,8 +6,8 @@ This document captures key findings from analyzing the `cursor-chat-browser` pro
 
 ## Project Reference
 
-**Repository**: `cursor-chat-browser` (located at `~/Projects/cursor-chat-browser`)  
-**Language**: TypeScript/JavaScript (Next.js)  
+**Repository**: `cursor-chat-browser` (located at `~/Projects/cursor-chat-browser`)
+**Language**: TypeScript/JavaScript (Next.js)
 **SQLite Library**: `better-sqlite3`
 
 ## Key Discoveries

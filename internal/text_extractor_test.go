@@ -138,7 +138,7 @@ func TestExtractFallbackText(t *testing.T) {
 			name:    "escaped quotes",
 			jsonStr: `{"text": "Hello \"world\""}`,
 			// The function doesn't unescape, so it extracts the raw string including escapes
-			want:    "Hello \\\"world\\\" ",
+			want: "Hello \\\"world\\\" ",
 		},
 		{
 			name:    "no text field",

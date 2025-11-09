@@ -44,8 +44,8 @@ var (
 				MarginBottom(1)
 
 	timestampStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")).
-		Italic(true)
+			Foreground(lipgloss.Color("240")).
+			Italic(true)
 )
 
 // showCmd represents the show command

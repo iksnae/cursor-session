@@ -55,7 +55,7 @@ func TestOpenDatabase(t *testing.T) {
 				if err := db.Ping(); err != nil {
 					t.Errorf("Database ping failed: %v", err)
 				}
-				db.Close()
+				_ = db.Close()
 			}
 		})
 	}
@@ -63,7 +63,7 @@ func TestOpenDatabase(t *testing.T) {
 
 func TestQueryCursorDiskKV(t *testing.T) {
 	db := testutil.CreateTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tests := []struct {
 		name    string
@@ -136,7 +136,7 @@ func TestQueryCursorDiskKV(t *testing.T) {
 
 func TestQueryCursorDiskKV_NullValues(t *testing.T) {
 	db := testutil.CreateInMemoryDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Insert a row with NULL value
 	_, err := db.Exec("INSERT INTO cursorDiskKV (key, value) VALUES (?, ?)", "test:key1", nil)
@@ -174,5 +174,3 @@ func matchesPattern(key, pattern string) bool {
 	}
 	return key == pattern
 }
-
-

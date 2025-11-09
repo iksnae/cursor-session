@@ -2,7 +2,6 @@ package internal
 
 import (
 	"testing"
-
 )
 
 func TestNewReconstructor(t *testing.T) {
@@ -156,5 +155,3 @@ func TestReconstructor_ReconstructAllConversations_Empty(t *testing.T) {
 		t.Errorf("ReconstructAllConversations() returned %d conversations, want 0", len(conversations))
 	}
 }
-
-

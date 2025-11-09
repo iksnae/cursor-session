@@ -152,5 +152,3 @@ func TestExtractTextFromRichText_ArrayOfNodes(t *testing.T) {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && strings.Contains(s, substr)
 }
-
-

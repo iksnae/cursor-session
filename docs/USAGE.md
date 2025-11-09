@@ -111,4 +111,3 @@ Sessions are cached in `~/.cursor-session-cache/` for faster access. The cache i
 ## Workspace Association
 
 Sessions are automatically associated with workspaces based on where they were created. You can filter exports by workspace using the `--workspace` flag with the workspace hash shown in the list command.
-

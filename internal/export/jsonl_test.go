@@ -79,7 +79,7 @@ func TestJSONLExporter_Export(t *testing.T) {
 					t.Errorf("Empty session should produce empty output, got: %q", output)
 					return
 				}
-				
+
 				// Verify each line is valid JSON (only if there are messages)
 				if len(tt.session.Messages) > 0 {
 					lines := strings.Split(strings.TrimSpace(output), "\n")
@@ -131,5 +131,3 @@ func TestJSONLExporter_Export_NilSession(t *testing.T) {
 	}()
 	_ = exporter.Export(nil, &buf) // Error ignored intentionally for panic test
 }
-
-

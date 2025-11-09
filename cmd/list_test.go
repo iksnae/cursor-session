@@ -39,11 +39,11 @@ func TestListCommand_FlagParsing(t *testing.T) {
 
 func TestDisplaySessionsFromComposers(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		composers []*internal.RawComposer
 	}{
 		{
-			name:     "empty composers",
+			name:      "empty composers",
 			composers: []*internal.RawComposer{},
 		},
 		{
@@ -165,4 +165,3 @@ func TestDisplaySessionsFromIndex(t *testing.T) {
 		})
 	}
 }
-

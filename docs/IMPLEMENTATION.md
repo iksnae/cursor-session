@@ -108,4 +108,3 @@ cursor-session/
 3. Add progress bars for long operations
 4. Add filtering by date range
 5. Add search functionality
-

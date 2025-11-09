@@ -233,4 +233,3 @@ func PrintWarning(message string) {
 		fmt.Fprintf(os.Stderr, "WARNING: %s\n", message)
 	}
 }
-

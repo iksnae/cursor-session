@@ -61,7 +61,7 @@ func GetStoragePaths(customPath string) (StoragePaths, error) {
 			// We'll use the directory containing the store.db as the agent storage root
 			// This allows FindAgentStoreDBs() to find this specific file and any others in the directory tree
 			agentRoot := dir
-			
+
 			// Try to find a reasonable root by walking up a few levels
 			// This handles cases where the file is deep in a nested structure
 			for i := 0; i < 3; i++ {
@@ -157,7 +157,7 @@ func detectStoragePathsAuto() (StoragePaths, error) {
 		// Priority: .config/cursor/chats (newer location) then .cursor/chats (older location)
 		configCursorChats := filepath.Join(home, ".config/cursor/chats")
 		dotCursorChats := filepath.Join(home, ".cursor/chats")
-		
+
 		if info, err := os.Stat(configCursorChats); err == nil && info.IsDir() {
 			agentStoragePath = configCursorChats
 		} else if info, err := os.Stat(dotCursorChats); err == nil && info.IsDir() {
@@ -211,7 +211,7 @@ func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
 	var storeDBs []string
 	var dirsScanned int
 	var dirsWithFiles int
-	
+
 	err := filepath.Walk(sp.AgentStoragePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			// Skip directories we can't access
@@ -273,12 +273,12 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 	if paths.GlobalStorageExists() {
 		sourceDB := paths.GetGlobalStorageDBPath()
 		destDB := filepath.Join(tmpDir, "state.vscdb")
-		
+
 		if err := copyDatabaseWithWAL(sourceDB, destDB); err != nil {
 			_ = cleanup()
 			return StoragePaths{}, nil, fmt.Errorf("failed to copy globalStorage database: %w", err)
 		}
-		
+
 		LogInfo("Copied globalStorage database to temporary location: %s", destDB)
 		newPaths.GlobalStorage = tmpDir
 	}
@@ -311,7 +311,7 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 
 				// Build destination path preserving structure
 				destDB := filepath.Join(agentTmpDir, relPath)
-				
+
 				// Ensure parent directory exists
 				if err := os.MkdirAll(filepath.Dir(destDB), 0755); err != nil {
 					_ = cleanup()

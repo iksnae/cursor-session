@@ -26,19 +26,19 @@ type CacheMetadata struct {
 
 // SessionIndexEntry represents a session entry in the index
 type SessionIndexEntry struct {
-	ID          string    `yaml:"id"`
-	ComposerID  string    `yaml:"composer_id"`
-	Name        string    `yaml:"name,omitempty"`
-	CreatedAt   string    `yaml:"created_at,omitempty"`
-	UpdatedAt   string    `yaml:"updated_at,omitempty"`
-	MessageCount int      `yaml:"message_count"`
-	Workspace   string    `yaml:"workspace,omitempty"`
+	ID           string `yaml:"id"`
+	ComposerID   string `yaml:"composer_id"`
+	Name         string `yaml:"name,omitempty"`
+	CreatedAt    string `yaml:"created_at,omitempty"`
+	UpdatedAt    string `yaml:"updated_at,omitempty"`
+	MessageCount int    `yaml:"message_count"`
+	Workspace    string `yaml:"workspace,omitempty"`
 }
 
 // SessionIndex represents the YAML index of all sessions
 type SessionIndex struct {
 	Sessions []SessionIndexEntry `yaml:"sessions"`
-	Metadata CacheMetadata        `yaml:"metadata"`
+	Metadata CacheMetadata       `yaml:"metadata"`
 }
 
 // NewCacheManager creates a new cache manager
@@ -358,7 +358,7 @@ func (cm *CacheManager) ClearCache() error {
 		// Delete all session files
 		for _, entry := range index.Sessions {
 			sessionPath := cm.GetSessionPath(entry.ID)
-			os.Remove(sessionPath)
+			_ = os.Remove(sessionPath)
 		}
 	}
 

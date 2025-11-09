@@ -8,15 +8,15 @@ import (
 func TestHealthcheckCommand(t *testing.T) {
 	// Test that the command exists and can be called
 	rootCmd.SetArgs([]string{"healthcheck", "--help"})
-	
+
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	
+
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("healthcheck command failed: %v", err)
 	}
-	
+
 	output := buf.String()
 	if output == "" {
 		t.Error("healthcheck --help should produce output")
@@ -32,7 +32,7 @@ func TestHealthcheckCommandExists(t *testing.T) {
 			break
 		}
 	}
-	
+
 	if !found {
 		t.Error("healthcheck command not found in root command")
 	}
@@ -47,15 +47,14 @@ func TestHealthcheckVerboseFlag(t *testing.T) {
 			break
 		}
 	}
-	
+
 	verboseFlag := healthcheckCmd.Flag("verbose")
 	if verboseFlag == nil {
 		t.Error("healthcheck command should have --verbose flag")
 	}
-	
+
 	// Check that the verbose flag has shorthand "v"
 	if verboseFlag != nil && verboseFlag.Shorthand != "v" {
 		t.Error("healthcheck command should have -v flag (shorthand for verbose)")
 	}
 }
-

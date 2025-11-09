@@ -22,7 +22,7 @@ func CreateSQLiteFixture(t *testing.T, dbPath string) {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create cursorDiskKV table
 	createTableSQL := `
@@ -119,5 +119,3 @@ func CreateMockCursorDir(t *testing.T) string {
 
 	return tmpDir
 }
-
-

@@ -47,9 +47,9 @@ func TestMarkdownExporter_Export(t *testing.T) {
 		{
 			name: "session with name",
 			session: &internal.Session{
-				ID:        "test3",
-				Source:    "globalStorage",
-				Messages:  []internal.Message{},
+				ID:       "test3",
+				Source:   "globalStorage",
+				Messages: []internal.Message{},
 				Metadata: internal.Metadata{
 					Name: "My Conversation",
 				},
@@ -115,10 +115,10 @@ func TestMarkdownExporter_Extension(t *testing.T) {
 
 func TestEscapeMarkdown(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		want     []string
-		notWant  []string
+		name    string
+		input   string
+		want    []string
+		notWant []string
 	}{
 		{
 			name:  "basic text",
@@ -127,15 +127,15 @@ func TestEscapeMarkdown(t *testing.T) {
 		},
 		{
 			name:    "markdown bold",
-			input:    "This is **bold** text",
-			want:     []string{"\\*\\*bold\\*\\*"},
-			notWant:  []string{"**bold**"},
+			input:   "This is **bold** text",
+			want:    []string{"\\*\\*bold\\*\\*"},
+			notWant: []string{"**bold**"},
 		},
 		{
 			name:    "markdown underline",
-			input:    "This is __underlined__ text",
-			want:     []string{"\\_\\_underlined\\_\\_"},
-			notWant:  []string{"__underlined__"},
+			input:   "This is __underlined__ text",
+			want:    []string{"\\_\\_underlined\\_\\_"},
+			notWant: []string{"__underlined__"},
 		},
 		{
 			name:  "code block preserved",
@@ -144,9 +144,9 @@ func TestEscapeMarkdown(t *testing.T) {
 		},
 		{
 			name:    "mixed content",
-			input:    "Regular text **bold** and ```code```",
-			want:     []string{"\\*\\*bold\\*\\*", "```code```"},
-			notWant:  []string{"**bold**"},
+			input:   "Regular text **bold** and ```code```",
+			want:    []string{"\\*\\*bold\\*\\*", "```code```"},
+			notWant: []string{"**bold**"},
 		},
 	}
 
@@ -166,5 +166,3 @@ func TestEscapeMarkdown(t *testing.T) {
 		})
 	}
 }
-
-

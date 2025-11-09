@@ -2,7 +2,6 @@ package internal
 
 import (
 	"testing"
-
 )
 
 func TestNewBubbleMap(t *testing.T) {
@@ -135,4 +134,3 @@ func TestBuildBubbleMapFromChannel_EmptyChannel(t *testing.T) {
 		t.Errorf("Map should be empty, got %d bubbles", len(bm.bubbles))
 	}
 }
-
