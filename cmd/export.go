@@ -155,6 +155,9 @@ Use 'cursor-session list' to see available session IDs.`,
 							sessions = append(sessions, session)
 						}
 
+						// Log summary statistics
+						internal.LogInfo("Normalization complete: %d composers processed, %d sessions created", len(conversations), len(sessions))
+
 						// Deduplicate
 						deduplicator := internal.NewDeduplicator()
 						sessions = deduplicator.Deduplicate(sessions)

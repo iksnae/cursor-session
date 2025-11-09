@@ -62,7 +62,7 @@ func (r *Reconstructor) ReconstructConversation(composer *RawComposer) (*Reconst
 	for _, header := range composer.FullConversationHeadersOnly {
 		bubble, ok := r.bubbleMap.Get(header.BubbleID)
 		if !ok {
-			// Bubble not found, skip
+			LogDebug("Bubble %s referenced in composer %s not found in bubble map", header.BubbleID, composer.ComposerID)
 			continue
 		}
 
@@ -110,14 +110,19 @@ func (r *Reconstructor) ReconstructAllConversations(composers []*RawComposer) ([
 	for _, composer := range composers {
 		conv, err := r.ReconstructConversation(composer)
 		if err != nil {
-			// Log error but continue
+			LogWarn("Failed to reconstruct conversation for composer %s: %v", composer.ComposerID, err)
 			continue
 		}
 
 		// Only include conversations with messages
-		if len(conv.Messages) > 0 {
-			conversations = append(conversations, conv)
+		if len(conv.Messages) == 0 {
+			headerCount := len(composer.FullConversationHeadersOnly)
+			LogWarn("Composer %s produced 0 messages (had %d headers). "+
+				"Possible causes: headers reference non-existent bubbles, or all messages were empty",
+				composer.ComposerID, headerCount)
+			continue
 		}
+		conversations = append(conversations, conv)
 	}
 
 	return conversations, nil
@@ -131,22 +136,29 @@ func ReconstructAsync(
 ) ([]*ReconstructedConversation, error) {
 	// Build bubble map from channel
 	bubbleMap := BuildBubbleMapFromChannel(bubbleChan)
+	LogInfo("Built bubble map with %d bubbles", bubbleMap.Len())
 
 	// Collect composers
 	var composers []*RawComposer
 	for composer := range composerChan {
 		if composer != nil {
 			composers = append(composers, composer)
+			headerCount := len(composer.FullConversationHeadersOnly)
+			LogInfo("Composer %s: %d headers, name='%s'", composer.ComposerID, headerCount, composer.Name)
 		}
 	}
+	LogInfo("Collected %d composers from channel", len(composers))
 
 	// Build context map from channel
 	contextMap := make(map[string][]*MessageContext)
+	contextCount := 0
 	for context := range contextChan {
 		if context != nil {
 			contextMap[context.ComposerID] = append(contextMap[context.ComposerID], context)
+			contextCount++
 		}
 	}
+	LogInfo("Built context map with %d contexts across %d composers", contextCount, len(contextMap))
 
 	// Reconstruct conversations
 	reconstructor := NewReconstructor(bubbleMap, contextMap)

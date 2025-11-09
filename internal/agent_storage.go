@@ -244,10 +244,18 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 		// Check if it's a composer (has composerId)
 		if composerID, ok := data["composerId"].(string); ok {
 			composer, err := parseComposerFromData(blob.Key, data)
-			if err == nil {
-				composer.ComposerID = composerID
-				composers = append(composers, composer)
+			if err != nil {
+				LogWarn("Failed to parse composer from blob key %s: %v", blob.Key, err)
+				continue
 			}
+			if composer.ComposerID == "" {
+				LogWarn("Composer parsed but missing composerId. Blob key: %s", blob.Key)
+				continue
+			}
+			composer.ComposerID = composerID
+			headerCount := len(composer.FullConversationHeadersOnly)
+			LogInfo("Parsed composer %s: %d headers, name='%s'", composer.ComposerID, headerCount, composer.Name)
+			composers = append(composers, composer)
 		}
 	}
 
@@ -301,6 +309,7 @@ func (r *AgentStorageReader) LoadAllSessionsFromAgentStorage() (map[string]*RawB
 
 		// Append composers
 		allComposers = append(allComposers, composers...)
+		LogInfo("Loaded from %s: %d bubbles, %d composers, %d context entries", dbPath, len(bubbles), len(composers), len(contexts))
 
 		// Merge contexts
 		for composerID, ctxList := range contexts {
@@ -308,6 +317,7 @@ func (r *AgentStorageReader) LoadAllSessionsFromAgentStorage() (map[string]*RawB
 		}
 	}
 
+	LogInfo("Total loaded from agent storage: %d bubbles, %d composers, %d context groups", len(allBubbles), len(allComposers), len(allContexts))
 	return allBubbles, allComposers, allContexts, nil
 }
 
@@ -417,6 +427,38 @@ func parseComposerFromData(key string, data map[string]interface{}) (*RawCompose
 				}
 				composer.FullConversationHeadersOnly = append(composer.FullConversationHeadersOnly, header)
 			}
+		}
+	}
+
+	// Fallback to legacy format: conversation[] array
+	if len(composer.FullConversationHeadersOnly) == 0 {
+		// Try legacy format: conversation[] array
+		if convArray, ok := data["conversation"].([]interface{}); ok && len(convArray) > 0 {
+			LogInfo("Composer %s: Using legacy conversation[] format (found %d entries)", composer.ComposerID, len(convArray))
+			// Convert legacy format to headers
+			for _, entry := range convArray {
+				if entryMap, ok := entry.(map[string]interface{}); ok {
+					header := ConversationHeader{}
+					if bubbleID, ok := entryMap["bubbleId"].(string); ok {
+						header.BubbleID = bubbleID
+					}
+					if t, ok := entryMap["type"].(float64); ok {
+						header.Type = int(t)
+					} else if t, ok := entryMap["type"].(int); ok {
+						header.Type = t
+					}
+					if header.BubbleID != "" {
+						composer.FullConversationHeadersOnly = append(composer.FullConversationHeadersOnly, header)
+					}
+				}
+			}
+		} else {
+			// Log available fields for debugging
+			keys := make([]string, 0, len(data))
+			for k := range data {
+				keys = append(keys, k)
+			}
+			LogWarn("Composer %s: No conversation data found. Available fields: %v", composer.ComposerID, keys)
 		}
 	}
 
