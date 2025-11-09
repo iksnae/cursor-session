@@ -3,9 +3,9 @@
 
 # Cursor Session
 
-A command-line tool to extract and export chat sessions from **Cursor IDE**. Extract your conversation history from Cursor's Composer and chat interface, export it in multiple formats, and keep your AI-assisted coding sessions organized.
+A command-line tool to extract and export chat sessions from **Cursor IDE** and **cursor-agent CLI**. Extract your conversation history from Cursor's Composer and chat interface, export it in multiple formats, and keep your AI-assisted coding sessions organized.
 
-Works with Cursor IDE's modern storage format (globalStorage) to extract conversations, code blocks, tool calls, and context from your chat sessions.
+Works with both Cursor IDE's desktop app storage (globalStorage) and cursor-agent CLI storage to extract conversations, code blocks, tool calls, and context from your chat sessions.
 
 ## Features
 
@@ -16,6 +16,9 @@ Works with Cursor IDE's modern storage format (globalStorage) to extract convers
 - ⚡ **Fast and efficient** - Intelligent caching for quick access to your sessions
 - 🎯 **Workspace-aware** - Automatically associates sessions with your workspaces
 - 🖥️ **Cross-platform** - Works on macOS and Linux
+- 🔌 **Multiple storage backends** - Supports both desktop app (globalStorage) and cursor-agent CLI storage
+- 🛠️ **Diagnostic tools** - Built-in healthcheck and path detection commands
+- 🔄 **Auto-upgrade** - Built-in upgrade command to get the latest version
 
 ## Installation
 
@@ -116,33 +119,65 @@ cursor-session show <session-id>
 
 # Export all sessions as Markdown
 cursor-session export --format md
+
+# Check if everything is working correctly
+cursor-session healthcheck
+
+# Upgrade to the latest version
+cursor-session upgrade
 ```
 
-## Basic Usage
+## Commands
 
-**List sessions:**
-
+### List Sessions
 ```bash
-cursor-session list
+cursor-session list [--clear-cache]
 ```
+Lists all available chat sessions with IDs, names, message counts, and creation dates.
 
-**View a session:**
-
+### Show Session
 ```bash
-cursor-session show <session-id>
+cursor-session show <session-id> [--limit <number>] [--since <timestamp>]
 ```
+Display messages from a specific session with optional filtering.
 
-**Export sessions:**
-
+### Export Sessions
 ```bash
-cursor-session export --format md
+cursor-session export [--format <format>] [--out <directory>] [--workspace <hash>] [--session-id <id>] [--clear-cache]
 ```
+Export sessions to various formats (jsonl, md, yaml, json). Filter by workspace or export a specific session.
+
+### Health Check
+```bash
+cursor-session healthcheck [--verbose]
+```
+Verify that cursor-session can locate and access session data. Useful for debugging storage issues.
+
+### Snoop (Path Detection)
+```bash
+cursor-session snoop [--hello]
+```
+Attempt to find the correct path to Cursor database files. Use `--hello` to seed the database with cursor-agent.
+
+### Upgrade
+```bash
+cursor-session upgrade
+```
+Upgrade cursor-session to the latest released version from GitHub.
+
+### Reconstruct (Debug)
+```bash
+cursor-session reconstruct
+```
+Reconstructs conversations and saves to intermediary JSON format. Primarily useful for debugging.
 
 For detailed usage information, see the [Usage Guide](docs/USAGE.md).
 
 ## Requirements
 
-- **Cursor IDE** installed (extracts from globalStorage format)
+- **Cursor IDE** or **cursor-agent CLI** installed
+  - Desktop app: Extracts from globalStorage format (macOS/Linux)
+  - Agent CLI: Extracts from cursor-agent storage (Linux only)
 - macOS or Linux
 
 ## Releases
@@ -167,11 +202,34 @@ git push origin v1.0.0
 
 The GitHub Actions workflow will automatically build binaries and create a release.
 
+## Storage Backends
+
+cursor-session supports two storage backends:
+
+1. **Desktop App Storage** (macOS/Linux)
+   - Location: `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` (macOS)
+   - Location: `~/.config/Cursor/User/globalStorage/state.vscdb` (Linux)
+   - Extracts from Cursor IDE's globalStorage database
+
+2. **Agent CLI Storage** (Linux only)
+   - Location: `~/.config/cursor/chats/` or `~/.cursor/chats/`
+   - Extracts from cursor-agent CLI session databases
+   - Automatically detected when cursor-agent is installed
+
+The tool automatically detects and uses the available storage backend. Desktop app storage takes priority if both are available.
+
+## Global Flags
+
+- `--verbose, -v` - Enable verbose logging
+- `--storage <path>` - Custom storage location (path to database file or storage directory)
+- `--copy` - Copy database files to temporary location to avoid locking issues
+
 ## Documentation
 
 - [Usage Guide](docs/USAGE.md) - Complete command reference
-- [Implementation Details](IMPLEMENTATION.md) - Technical implementation summary
+- [Implementation Details](docs/IMPLEMENTATION.md) - Technical implementation summary
 - [Technical Design](docs/TDD.md) - Architecture and design decisions
+- [Testing Guide](docs/TESTING.md) - Testing strategy and coverage
 
 ## License
 

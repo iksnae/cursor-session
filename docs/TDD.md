@@ -22,18 +22,21 @@ The system forms part of the **Khaos Machine developer observability layer**, al
 ### 2.1 Goals
 
 - ✅ Discover Cursor chat session data across macOS and Linux.
-- ✅ Parse both legacy and modern storage backends:
-  - SQLite (`state.vscdb`)
-  - Chromium CacheStorage (binary `_0` files)
-- ✅ Export structured logs in **JSONL**, **Markdown**, or **HTML**.
-- ✅ Prepare foundation for integration with Khaos Forge and Khaos Machine runtime agents.
+- ✅ Parse modern storage backends:
+  - Desktop app: SQLite (`state.vscdb` in globalStorage)
+  - Agent CLI: SQLite (`store.db` files in cursor-agent storage) - Linux only
+- ✅ Export structured logs in **JSONL**, **Markdown**, **YAML**, and **JSON**.
+- ✅ Support both desktop app and cursor-agent CLI storage formats.
+- ✅ Intelligent caching for fast access.
+- ✅ Diagnostic tools for troubleshooting.
 
 ### 2.2 Non-Goals
 
-- ❌ Direct access to Cursor’s internal APIs.
+- ❌ Direct access to Cursor's internal APIs.
 - ❌ Real-time monitoring of Cursor processes.
-- ❌ Full IndexedDB schema reconstruction (initially).
+- ❌ Full IndexedDB schema reconstruction.
 - ❌ Chain-of-thought or reasoning reconstruction (beyond exposed data).
+- ❌ Windows support for agent storage (initially).
 
 ---
 
@@ -61,11 +64,11 @@ Local FS paths Exported session archives
 
 ## 4. Environment & Platform Support
 
-| OS      | Default Path                                 | Format(s)             | Supported |
-| ------- | -------------------------------------------- | --------------------- | --------- |
-| macOS   | `~/Library/Application Support/Cursor/User/` | SQLite + CacheStorage | ✅        |
-| Linux   | `~/.config/Cursor/User/`                     | SQLite + CacheStorage | ✅        |
-| Windows | `%APPDATA%/Cursor/User/`                     | SQLite + CacheStorage | Planned   |
+| OS      | Desktop App Path                             | Agent CLI Path              | Format(s)        | Supported |
+| ------- | --------------------------------------------- | -------------------------- | ---------------- | --------- |
+| macOS   | `~/Library/Application Support/Cursor/User/` | N/A                        | SQLite (globalStorage) | ✅        |
+| Linux   | `~/.config/Cursor/User/`                      | `~/.config/cursor/chats/`  | SQLite (both)    | ✅        |
+| Windows | `%APPDATA%/Cursor/User/`                      | N/A                        | SQLite           | Planned   |
 
 ---
 
@@ -76,12 +79,15 @@ Local FS paths Exported session archives
 Implements user-facing commands via **Cobra**.
 Each subcommand maps to an operation in the core package.
 
-| Command  | Description                                    |
-| -------- | ---------------------------------------------- |
-| `list`   | Lists available sessions from both storages.   |
-| `export` | Exports sessions in desired format.            |
-| `scan`   | Scans filesystem for database and cache files. |
-| `merge`  | (Planned) Merges with Khaos agent logs.        |
+| Command      | Description                                    |
+| ------------ | ---------------------------------------------- |
+| `list`       | Lists available sessions from both storages.   |
+| `show`       | Displays messages from a specific session.     |
+| `export`     | Exports sessions in desired format.            |
+| `healthcheck`| Verifies storage access and session availability. |
+| `snoop`      | Finds database file paths and verifies access.  |
+| `upgrade`    | Upgrades to latest version from GitHub.         |
+| `reconstruct`| Reconstructs conversations (debug).             |
 
 ---
 
@@ -98,18 +104,18 @@ Each subcommand maps to an operation in the core package.
       Web       string
   }
 
-  5.2.2 sqlite_reader.go
+  5.2.2 storage.go (Desktop App Storage)
   	•	Opens state.vscdb using modernc.org/sqlite.
-  	•	Executes key queries on ItemTable.
-  	•	Parses value column JSON with gjson.
-  	•	Extracts messages[] containing {role, content}.
+  	•	Queries cursorDiskKV table for bubble and composer data.
+  	•	Parses JSON values with gjson.
+  	•	Extracts messages, contexts, and code blocks.
   	•	Returns unified Session structs.
 
-  5.2.3 cache_reader.go
-  	•	Iterates through WebStorage/*/CacheStorage/*/*.0 files.
-  	•	Reads binary content and searches for embedded JSON ({…}).
-  	•	Parses messages when keys like messages, role, content exist.
-  	•	Returns partial Session objects for normalization.
+  5.2.3 agent_storage.go (Agent CLI Storage)
+  	•	Scans cursor-agent storage directory for store.db files.
+  	•	Opens multiple SQLite databases (one per session).
+  	•	Queries session tables for messages and metadata.
+  	•	Returns normalized Session objects.
 
   5.2.4 model.go
   Defines base data structures:
@@ -142,13 +148,14 @@ Handles export logic for multiple formats:
 
 User runs: cursor-session export --format jsonl
 
-1. Detect OS → resolve Cursor storage paths.
-2. Walk workspaceStorage → find all state.vscdb.
-3. For each DB → parse sessions from ItemTable.
-4. Walk WebStorage → detect CacheStorage/\_0 files.
-5. Parse potential JSON fragments → extract messages.
-6. Normalize all sessions → assign UUIDs.
-7. Export to /exports/<session-id>.<format>
+1. Detect OS → resolve Cursor storage paths (desktop app and/or agent CLI).
+2. Check for desktop app storage (globalStorage/state.vscdb).
+3. If not found, check for agent CLI storage (~/.config/cursor/chats/).
+4. Load data from selected backend (bubbles, composers, contexts).
+5. Reconstruct conversations from raw data.
+6. Normalize all sessions → assign UUIDs, associate workspaces.
+7. Cache sessions for future fast access.
+8. Export to /exports/<session-id>.<format>
 
 ⸻
 
@@ -209,6 +216,10 @@ Cloud Sync Option to push exports to Khaos backend via REST/GraphQL.
 
 cursor-session list
 
+# Show messages from a session
+
+cursor-session show <session-id> --limit 10
+
 # Export all sessions as JSONL
 
 cursor-session export --format jsonl --out ./exports
@@ -217,9 +228,21 @@ cursor-session export --format jsonl --out ./exports
 
 cursor-session export --format md
 
-# Deep scan CacheStorage as well
+# Export specific session
 
-cursor-session export --deep
+cursor-session export --session-id <id> --format md
+
+# Check storage health
+
+cursor-session healthcheck
+
+# Find database paths
+
+cursor-session snoop
+
+# Upgrade to latest version
+
+cursor-session upgrade
 
 Output structure:
 
@@ -265,8 +288,15 @@ Regression Tests Re-run after schema changes to verify backward compatibility.
     • ✅ Example dataset for testing (fixtures/)
     • ✅ Documentation:
     • README.md
-    • TECH_DESIGN.md
-    • POC_REPORT.md
+    • USAGE.md
+    • IMPLEMENTATION.md
+    • TDD.md
+    • TESTING.md
+    • Research documentation in docs/research/
+    • ✅ Multiple storage backend support
+    • ✅ Caching system
+    • ✅ Diagnostic tools
+    • ✅ Auto-upgrade functionality
     • 🚧 Future: Dockerized version for CI automation
 
 ⸻
@@ -280,5 +310,20 @@ This design supports both backward compatibility and forward evolution toward fu
 
 ⸻
 
-Status: Approved for implementation
-Next Milestone: Implement full CacheStorage extraction module and JSONL normalization.
+Status: ✅ Implementation Complete
+
+**Current Status:**
+- ✅ Desktop app storage (globalStorage) support - macOS/Linux
+- ✅ Agent CLI storage support - Linux
+- ✅ Multiple export formats (JSONL, Markdown, YAML, JSON)
+- ✅ Caching system for fast access
+- ✅ Diagnostic tools (healthcheck, snoop)
+- ✅ Auto-upgrade functionality
+- ✅ Workspace association
+- ✅ Progress indicators
+
+**Future Enhancements:**
+- Windows support for agent storage
+- Search functionality across sessions
+- Date range filtering
+- Integration with Khaos Machine runtime agents

@@ -31,9 +31,12 @@
 ### Phase 5: CLI Implementation ✅
 - ✅ Root command (`cmd/root.go`)
 - ✅ List command (`cmd/list.go`)
-- ✅ Show command (`cmd/show.go`) - **Added feature for listing session messages**
-- ✅ Export command (`cmd/export.go`)
+- ✅ Show command (`cmd/show.go`) - Display session messages with filtering
+- ✅ Export command (`cmd/export.go`) - Export with filtering options
 - ✅ Reconstruct command (`cmd/reconstruct.go`)
+- ✅ Healthcheck command (`cmd/healthcheck.go`) - Storage health verification
+- ✅ Snoop command (`cmd/snoop.go`) - Path detection and debugging
+- ✅ Upgrade command (`cmd/upgrade.go`) - Auto-upgrade functionality
 - ✅ Main entry point (`main.go`)
 
 ### Phase 6: Error Handling & Logging ✅
@@ -48,13 +51,21 @@
 
 ## Features Implemented
 
-1. **Modern Format Support**: Extracts from globalStorage/cursorDiskKV only
+1. **Multiple Storage Backends**:
+   - Desktop app storage (globalStorage/cursorDiskKV) - macOS/Linux
+   - Agent CLI storage (cursor-agent store.db files) - Linux only
 2. **Async Processing**: Uses goroutines and channels for parallel data loading
 3. **Multi-Format Export**: Supports jsonl, md, yaml, json
-4. **Session Listing**: `list` command shows all available sessions
-5. **Message Display**: `show` command displays messages for a specific session
+4. **Session Listing**: `list` command shows all available sessions with metadata
+5. **Message Display**: `show` command displays messages with filtering (limit, since)
 6. **Workspace Association**: Automatically associates sessions with workspaces
-7. **Intermediary Format**: Optional reconstruction to JSON for debugging
+7. **Caching System**: Intelligent caching for fast access (`~/.cursor-session-cache/`)
+8. **Export Filtering**: Filter by workspace or export specific sessions
+9. **Diagnostic Tools**: Healthcheck and snoop commands for troubleshooting
+10. **Auto-Upgrade**: Built-in upgrade command to get latest version
+11. **Database Copying**: `--copy` flag to avoid locking issues
+12. **Custom Storage Paths**: `--storage` flag for custom database locations
+13. **Intermediary Format**: Optional reconstruction to JSON for debugging
 
 ## File Structure
 
@@ -63,9 +74,12 @@ cursor-session/
 ├── cmd/
 │   ├── root.go
 │   ├── list.go
-│   ├── show.go          # Added for listing session messages
+│   ├── show.go          # Display session messages
 │   ├── export.go
-│   └── reconstruct.go
+│   ├── reconstruct.go
+│   ├── healthcheck.go    # Storage health verification
+│   ├── snoop.go          # Path detection
+│   └── upgrade.go        # Auto-upgrade
 ├── internal/
 │   ├── detect.go
 │   ├── database.go
@@ -101,10 +115,27 @@ cursor-session/
 - ✅ No linter errors
 - ✅ CLI help working
 
+## Additional Components
+
+### Caching System
+- Cache manager (`internal/cache.go`) for fast session access
+- Automatic cache invalidation when source data changes
+- Session index for quick listing without full reconstruction
+
+### Agent Storage Support
+- Agent storage backend (`internal/agent_storage.go`)
+- Supports cursor-agent CLI session databases
+- Linux-only support for agent storage
+
+### Progress Indicators
+- Progress display system (`internal/progress.go`)
+- Step-by-step progress for long operations
+- User-friendly feedback during export and reconstruction
+
 ## Next Steps (Optional Enhancements)
 
 1. Add integration tests with mock databases
 2. Add more comprehensive error recovery
-3. Add progress bars for long operations
-4. Add filtering by date range
-5. Add search functionality
+3. Add search functionality across sessions
+4. Add date range filtering for exports
+5. Add Windows support for agent storage
