@@ -32,6 +32,13 @@ func (bm *BubbleMap) Set(bubbleID string, bubble *RawBubble) {
 	bm.bubbles[bubbleID] = bubble
 }
 
+// Len returns the number of bubbles in the map
+func (bm *BubbleMap) Len() int {
+	bm.mu.RLock()
+	defer bm.mu.RUnlock()
+	return len(bm.bubbles)
+}
+
 // BuildBubbleMapFromChannel builds a bubble map from a channel
 func BuildBubbleMapFromChannel(bubbleChan <-chan *RawBubble) *BubbleMap {
 	bm := NewBubbleMap()
