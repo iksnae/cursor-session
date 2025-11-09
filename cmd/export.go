@@ -233,12 +233,14 @@ Use 'cursor-session list' to see available session IDs.`,
 				}
 
 				if err := exporter.Export(session, file); err != nil {
-					file.Close()
+					_ = file.Close()
 					internal.LogError("Failed to export session %s: %v", session.ID, err)
 					continue
 				}
 
-				file.Close()
+				if err := file.Close(); err != nil {
+					internal.LogWarn("Failed to close file %s: %v", filepath, err)
+				}
 			}
 			return nil
 		})

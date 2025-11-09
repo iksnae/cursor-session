@@ -275,7 +275,7 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 		destDB := filepath.Join(tmpDir, "state.vscdb")
 		
 		if err := copyFile(sourceDB, destDB); err != nil {
-			cleanup()
+			_ = cleanup()
 			return StoragePaths{}, nil, fmt.Errorf("failed to copy globalStorage database: %w", err)
 		}
 		
@@ -287,7 +287,7 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 	if paths.HasAgentStorage() {
 		storeDBs, err := paths.FindAgentStoreDBs()
 		if err != nil {
-			cleanup()
+			_ = cleanup()
 			return StoragePaths{}, nil, fmt.Errorf("failed to find agent storage databases: %w", err)
 		}
 
@@ -295,7 +295,7 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 			// Create agent storage directory structure in temp, preserving the original structure
 			agentTmpDir := filepath.Join(tmpDir, "agent-storage")
 			if err := os.MkdirAll(agentTmpDir, 0755); err != nil {
-				cleanup()
+				_ = cleanup()
 				return StoragePaths{}, nil, fmt.Errorf("failed to create agent storage temp directory: %w", err)
 			}
 
@@ -314,12 +314,12 @@ func CopyStoragePaths(paths StoragePaths) (StoragePaths, func() error, error) {
 				
 				// Ensure parent directory exists
 				if err := os.MkdirAll(filepath.Dir(destDB), 0755); err != nil {
-					cleanup()
+					_ = cleanup()
 					return StoragePaths{}, nil, fmt.Errorf("failed to create directory for copied database: %w", err)
 				}
 
 				if err := copyFile(sourceDB, destDB); err != nil {
-					cleanup()
+					_ = cleanup()
 					return StoragePaths{}, nil, fmt.Errorf("failed to copy agent storage database %s: %w", sourceDB, err)
 				}
 
@@ -342,13 +342,17 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	defer sourceFile.Close()
+	defer func() {
+		_ = sourceFile.Close()
+	}()
 
 	destFile, err := os.Create(dst)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() {
+		_ = destFile.Close()
+	}()
 
 	_, err = io.Copy(destFile, sourceFile)
 	if err != nil {
