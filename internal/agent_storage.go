@@ -277,38 +277,38 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 				if jsonErr := json.Unmarshal(decoded, &data); jsonErr == nil {
 					// Successfully decoded and parsed
 					LogInfo("Blob %d (key='%s') was base64 encoded, decoded successfully", i+1, blob.Key)
-					} else {
-						// Base64 decoded but not JSON - try extracting JSON from binary
-						jsonBytes, found := extractJSONFromBinary(decoded)
-						if found {
-							// extractJSONFromBinary already validated it's valid JSON
-							if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
-								LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
-							} else {
-								// This shouldn't happen since extractJSONFromBinary validates, but handle it anyway
-								jsonParseFailures++
-								if i < 5 {
-									valuePreview := blob.Value
-									if len(valuePreview) > 100 {
-										valuePreview = valuePreview[:100] + "..."
-									}
-									LogWarn("Blob %d (key='%s') failed JSON parse after extraction: %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
-								}
-								continue
-							}
+				} else {
+					// Base64 decoded but not JSON - try extracting JSON from binary
+					jsonBytes, found := extractJSONFromBinary(decoded)
+					if found {
+						// extractJSONFromBinary already validated it's valid JSON
+						if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+							LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
 						} else {
-							// Decoded but still not JSON - log and skip
+							// This shouldn't happen since extractJSONFromBinary validates, but handle it anyway
 							jsonParseFailures++
 							if i < 5 {
 								valuePreview := blob.Value
 								if len(valuePreview) > 100 {
 									valuePreview = valuePreview[:100] + "..."
 								}
-								LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+								LogWarn("Blob %d (key='%s') failed JSON parse after extraction: %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
 							}
 							continue
 						}
+					} else {
+						// Decoded but still not JSON - log and skip
+						jsonParseFailures++
+						if i < 5 {
+							valuePreview := blob.Value
+							if len(valuePreview) > 100 {
+								valuePreview = valuePreview[:100] + "..."
+							}
+							LogWarn("Blob %d (key='%s') failed JSON parse (tried base64 too): %v. Value preview: %s", i+1, blob.Key, jsonErr, valuePreview)
+						}
+						continue
 					}
+				}
 			} else {
 				// Not base64 - try hex decode (like we do for meta entries)
 				hexDecoded, hexErr := tryHexDecode(blob.Value)
@@ -434,6 +434,20 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 				} else {
 					LogWarn("Blob %d failed to convert message to bubble: %v", i+1, err)
 				}
+			}
+		} else if role, hasRole := data["role"].(string); hasRole {
+			// Handle messages with role and content but no id field
+			// Generate a unique ID from the blob key
+			generatedID := blob.Key
+			if len(blob.Key) > 16 {
+				generatedID = blob.Key[:16]
+			}
+			bubble, err := parseMessageToBubble(blob.Key, generatedID, role, data, sessionID)
+			if err == nil {
+				bubbles[bubble.BubbleID] = bubble
+				LogInfo("Blob %d converted message (no id, role='%s') to bubble (bubbleId='%s')", i+1, role, bubble.BubbleID)
+			} else {
+				LogWarn("Blob %d failed to convert message to bubble: %v", i+1, err)
 			}
 		}
 
@@ -770,6 +784,10 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 	}, text)
 	text = strings.TrimSpace(text)
 
+	// Trim quotes from beginning and end (both single and double quotes)
+	// This handles cases like: "text$uuid or 'text$uuid
+	text = strings.Trim(text, `"'`)
+
 	if text == "" {
 		return nil // No text before $
 	}
@@ -829,8 +847,18 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 // parseMessageToBubble converts a message format (id, role, content) to a RawBubble
 // This handles cursor-agent's message format where messages have id, role, and content fields
 func parseMessageToBubble(key, id, role string, data map[string]interface{}, sessionID string) (*RawBubble, error) {
+	// Create unique bubbleID by combining message id with blob key
+	// This prevents multiple messages with the same id from overwriting each other
+	// Use first 8 chars of blob key to keep it readable
+	bubbleID := id
+	if len(key) >= 8 {
+		bubbleID = id + "-" + key[:8]
+	} else {
+		bubbleID = id + "-" + key
+	}
+
 	bubble := &RawBubble{
-		BubbleID: id,
+		BubbleID: bubbleID,
 		ChatID:   sessionID,
 	}
 
@@ -1079,19 +1107,19 @@ func extractJSONFromBinary(data []byte) ([]byte, bool) {
 				if depth == 0 {
 					// Found complete brace structure - validate it's actually valid JSON
 					jsonBytes := data[startIdx : i+1]
-					
+
 					// Quick validation: check if it's valid UTF-8 and has reasonable structure
 					if !utf8.Valid(jsonBytes) {
 						return nil, false
 					}
-					
+
 					// Try to parse as JSON to ensure it's valid
 					var testData interface{}
 					if err := json.Unmarshal(jsonBytes, &testData); err != nil {
 						// Not valid JSON - might be binary data with { } characters
 						return nil, false
 					}
-					
+
 					// Valid JSON found
 					return jsonBytes, true
 				}
