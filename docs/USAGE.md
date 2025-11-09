@@ -83,13 +83,15 @@ Reconstructs conversations and saves to intermediary JSON format. This is primar
 cursor-session upgrade
 ```
 
-Upgrades cursor-session to the latest version by pulling latest changes, rebuilding, and reinstalling.
+Upgrades cursor-session to the latest released version from GitHub. The command will:
+1. Check your current installed version
+2. Fetch the latest release from GitHub
+3. Download and install the latest binary if a newer version is available
 
-**Note**: This command works if you installed from a cloned repository. 
-
-For other installation methods:
-- If you installed via `go install`, use: `go install github.com/iksnae/cursor-session@latest` (or `@main` for dev)
-- If you installed from a pre-built binary, download the latest release from the [Releases](https://github.com/iksnae/cursor-session/releases) page
+**Alternative**: If you installed via `go install`, you can also upgrade by running:
+```bash
+go install github.com/iksnae/cursor-session@latest
+```
 
 ## Export Formats
 

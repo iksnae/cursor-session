@@ -31,12 +31,27 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
+          if [ -z "$VERSION" ]; then
+            echo "Error: VERSION is empty!"
+            exit 1
+          fi
 
       - name: Get commit SHA
         id: commit
         run: |
           COMMIT=$(git rev-parse --short HEAD)
           echo "commit=$COMMIT" >> $GITHUB_OUTPUT
+          echo "Commit: $COMMIT"
+
+      - name: Verify build variables
+        run: |
+          echo "Building with:"
+          echo "  Version: ${{ steps.version.outputs.version }}"
+          echo "  Commit: ${{ steps.commit.outputs.commit }}"
+          if [ -z "${{ steps.version.outputs.version }}" ]; then
+            echo "Error: Version is empty!"
+            exit 1
+          fi
 
       - name: Build binaries
         env:
@@ -44,6 +59,18 @@ jobs:
           COMMIT: ${{ steps.commit.outputs.commit }}
         run: |
           mkdir -p dist
+          
+          # Verify environment variables are set
+          if [ -z "$VERSION" ]; then
+            echo "Error: VERSION environment variable is not set!"
+            exit 1
+          fi
+          if [ -z "$COMMIT" ]; then
+            echo "Error: COMMIT environment variable is not set!"
+            exit 1
+          fi
+          
+          echo "Building binaries with version=$VERSION, commit=$COMMIT"
           
           for target in \
             "darwin/amd64" \
@@ -55,17 +82,28 @@ jobs:
             
             echo "Building for $os/$arch..."
             
+            BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "  Build date: $BUILD_DATE"
+            
             GOOS=$os GOARCH=$arch go build -buildvcs=false \
-              -ldflags "-X 'github.com/iksnae/cursor-session/cmd.version=$VERSION' -X 'github.com/iksnae/cursor-session/cmd.commit=$COMMIT' -X 'github.com/iksnae/cursor-session/cmd.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
+              -ldflags "-X 'github.com/iksnae/cursor-session/cmd.version=$VERSION' -X 'github.com/iksnae/cursor-session/cmd.commit=$COMMIT' -X 'github.com/iksnae/cursor-session/cmd.date=$BUILD_DATE'" \
               -o cursor-session \
               .
             
-            # Create archive
-            if [ "$os" = "darwin" ]; then
-              tar -czf "dist/cursor-session-${VERSION}-${os}-${arch}.tar.gz" cursor-session
-            else
-              tar -czf "dist/cursor-session-${VERSION}-${os}-${arch}.tar.gz" cursor-session
+            # Verify the binary has the correct version
+            if [ "$os" = "darwin" ] && [ "$arch" = "amd64" ]; then
+              # Only verify on one platform to avoid cross-platform issues
+              BINARY_VERSION=$(./cursor-session --version 2>/dev/null | head -1 || echo "")
+              echo "  Binary reports version: $BINARY_VERSION"
+              if ! echo "$BINARY_VERSION" | grep -q "$VERSION"; then
+                echo "  WARNING: Binary version doesn't match expected version!"
+                echo "  Expected: $VERSION"
+                echo "  Got: $BINARY_VERSION"
+              fi
             fi
+            
+            # Create archive
+            tar -czf "dist/cursor-session-${VERSION}-${os}-${arch}.tar.gz" cursor-session
             
             rm cursor-session
           done
