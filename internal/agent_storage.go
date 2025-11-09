@@ -664,7 +664,7 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 		// Remove all other control characters
 		return -1
 	}, value)
-	
+
 	// Trim whitespace from both ends
 	cleaned = strings.TrimSpace(cleaned)
 
