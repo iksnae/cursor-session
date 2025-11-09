@@ -8,8 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // AgentStorageReader reads session data from cursor-agent CLI store.db files
@@ -305,70 +308,101 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 					}
 				}
 			} else {
-				// Not base64 - try extracting JSON from binary data
-				jsonBytes, found := extractJSONFromBinary(valueBytes)
-				if found {
-					jsonPreview := string(jsonBytes)
-					if len(jsonPreview) > 200 {
-						jsonPreview = jsonPreview[:200] + "..."
-					}
-					LogInfo("Blob %d (key='%s'): Found JSON in binary (len=%d): %s", i+1, blob.Key, len(jsonBytes), jsonPreview)
-					if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
-						LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
-						// Log fields to understand structure
-						keys := make([]string, 0, len(data))
-						for k := range data {
-							keys = append(keys, k)
-						}
-						LogInfo("Blob %d extracted JSON fields: %v", i+1, keys)
+				// Not base64 - try hex decode (like we do for meta entries)
+				hexDecoded, hexErr := tryHexDecode(blob.Value)
+				if hexErr == nil {
+					// Try JSON parse on hex-decoded data
+					if jsonErr := json.Unmarshal(hexDecoded, &data); jsonErr == nil {
+						LogInfo("Blob %d (key='%s') was hex encoded, decoded successfully", i+1, blob.Key)
 					} else {
-						jsonParseFailures++
-						if i < 10 {
-							LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse (tried binary extraction): %v", i+1, blob.Key, len(blob.Key), jsonErr)
-							LogInfo("  Extracted JSON preview: %s", jsonPreview)
+						// Hex decoded but not JSON - try extracting JSON from binary
+						jsonBytes, found := extractJSONFromBinary(hexDecoded)
+						if found {
+							if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+								LogInfo("Blob %d (key='%s') had JSON embedded in hex-decoded binary data, extracted successfully", i+1, blob.Key)
+							} else {
+								// Hex decoded and JSON found but parse failed - skip
+								jsonParseFailures++
+								if i < 5 {
+									LogWarn("Blob %d (key='%s') hex decoded but JSON parse failed: %v", i+1, blob.Key, jsonErr)
+								}
+								continue
+							}
+						} else {
+							// Hex decoded but no JSON found - skip
+							jsonParseFailures++
+							if i < 5 {
+								LogWarn("Blob %d (key='%s') was hex encoded but contains no JSON", i+1, blob.Key)
+							}
+							continue
 						}
-						continue
 					}
 				} else {
-					// Not base64 and no JSON in binary - try parsing as text message format (text$uuid)
-					// This handles cursor-agent's user message format: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
-					if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
-						bubbles[bubble.BubbleID] = bubble
-						LogInfo("Blob %d parsed as text message format (user message): bubbleId='%s', text='%s', chatId='%s'", i+1, bubble.BubbleID, bubble.Text, bubble.ChatID)
-						continue
-					} else {
-						// Log that we tried but failed to parse as text format
-						if i < 5 {
-							valuePreview := blob.Value
-							if len(valuePreview) > 100 {
-								valuePreview = valuePreview[:100] + "..."
+					// Not hex - try extracting JSON from binary data
+					jsonBytes, found := extractJSONFromBinary(valueBytes)
+					if found {
+						jsonPreview := string(jsonBytes)
+						if len(jsonPreview) > 200 {
+							jsonPreview = jsonPreview[:200] + "..."
+						}
+						LogInfo("Blob %d (key='%s'): Found JSON in binary (len=%d): %s", i+1, blob.Key, len(jsonBytes), jsonPreview)
+						if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
+							LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
+							// Log fields to understand structure
+							keys := make([]string, 0, len(data))
+							for k := range data {
+								keys = append(keys, k)
 							}
-							LogInfo("Blob %d: tried text message format but didn't match pattern. Value preview: %s", i+1, valuePreview)
+							LogInfo("Blob %d extracted JSON fields: %v", i+1, keys)
+						} else {
+							jsonParseFailures++
+							if i < 10 {
+								LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse (tried binary extraction): %v", i+1, blob.Key, len(blob.Key), jsonErr)
+								LogInfo("  Extracted JSON preview: %s", jsonPreview)
+							}
+							continue
+						}
+					} else {
+						// Not base64 and no JSON in binary - try parsing as text message format (text$uuid)
+						// This handles cursor-agent's user message format: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
+						if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
+							bubbles[bubble.BubbleID] = bubble
+							LogInfo("Blob %d parsed as text message format (user message): bubbleId='%s', text='%s', chatId='%s'", i+1, bubble.BubbleID, bubble.Text, bubble.ChatID)
+							continue
+						} else {
+							// Log that we tried but failed to parse as text format
+							// Only log if value appears to be readable (not binary garbage)
+							if i < 5 && isReadableText(blob.Value) {
+								valuePreview := blob.Value
+								if len(valuePreview) > 100 {
+									valuePreview = valuePreview[:100] + "..."
+								}
+								LogInfo("Blob %d: tried text message format but didn't match pattern. Value preview: %s", i+1, valuePreview)
+							}
+							// Not a text message format - the value might be a reference or in a different format
+							// Log detailed info for first few failures to understand the format
+							jsonParseFailures++
+							if i < 10 {
+								valuePreview := blob.Value
+								fullValue := blob.Value
+								if len(valuePreview) > 200 {
+									valuePreview = valuePreview[:200] + "..."
+								}
+								LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
+								LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+								LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
+								// Check if value looks like a path or reference
+								if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
+									LogInfo("  Value appears to be a path/reference, not JSON data")
+								}
+								// Check if there's a { in the value that might indicate JSON
+								if bytes.Contains(valueBytes, []byte("{")) {
+									LogInfo("  Value contains '{' but extraction failed - JSON might be incomplete or malformed")
+								}
+							}
+							continue
 						}
 					}
-
-					// Not a text message format - the value might be a reference or in a different format
-					// Log detailed info for first few failures to understand the format
-					jsonParseFailures++
-					if i < 10 {
-						valuePreview := blob.Value
-						fullValue := blob.Value
-						if len(valuePreview) > 200 {
-							valuePreview = valuePreview[:200] + "..."
-						}
-						LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
-						LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
-						LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
-						// Check if value looks like a path or reference
-						if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
-							LogInfo("  Value appears to be a path/reference, not JSON data")
-						}
-						// Check if there's a { in the value that might indicate JSON
-						if bytes.Contains(valueBytes, []byte("{")) {
-							LogInfo("  Value contains '{' but extraction failed - JSON might be incomplete or malformed")
-						}
-					}
-					continue
 				}
 			}
 		}
@@ -650,10 +684,56 @@ func parseBubbleFromData(key string, data map[string]interface{}, sessionID stri
 	return bubble, nil
 }
 
+// isValidUUID checks if a string is a valid UUID format
+var uuidRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+func isValidUUID(s string) bool {
+	return uuidRegex.MatchString(strings.ToLower(s))
+}
+
+// isReadableText checks if text is mostly readable (not garbled binary data)
+// Returns true if text is valid UTF-8 and has a reasonable ratio of printable characters
+func isReadableText(text string) bool {
+	// Must be valid UTF-8
+	if !utf8.ValidString(text) {
+		return false
+	}
+
+	// Empty text is not readable
+	if len(text) == 0 {
+		return false
+	}
+
+	// Count printable vs non-printable characters
+	printableCount := 0
+	totalRunes := 0
+	for _, r := range text {
+		totalRunes++
+		if unicode.IsPrint(r) || r == '\n' || r == '\r' || r == '\t' {
+			printableCount++
+		}
+	}
+
+	// If we have very few runes, require all to be printable
+	if totalRunes < 5 {
+		return printableCount == totalRunes
+	}
+
+	// For longer text, require at least 70% printable characters
+	// This filters out binary data that happens to contain a $ character
+	printableRatio := float64(printableCount) / float64(totalRunes)
+	return printableRatio >= 0.70
+}
+
 // parseTextMessageFormat parses cursor-agent's text message format: "text$uuid"
-// Returns a RawBubble if the format matches, nil otherwise
+// Returns a RawBubble if the format matches and data is valid, nil otherwise
 // Handles format like: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d" (may have control chars)
 func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
+	// First, check if value is valid UTF-8 - if not, it's likely binary data
+	if !utf8.ValidString(value) {
+		return nil
+	}
+
 	// First, aggressively remove all control characters except newlines/tabs/carriage returns
 	// This handles cases where the value starts with control chars like \x05, \n, etc.
 	cleaned := strings.Map(func(r rune) rune {
@@ -690,6 +770,11 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 		return nil // No text before $
 	}
 
+	// Validate that the text is actually readable (not garbled binary data)
+	if !isReadableText(text) {
+		return nil // Text is not readable, likely binary data
+	}
+
 	// Extract UUID after $ (optional, but useful for bubble ID)
 	uuidPart := ""
 	if dollarIdx+1 < len(cleaned) {
@@ -701,6 +786,17 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 			}
 			return r
 		}, uuidPart)
+	}
+
+	// If UUID part exists, validate it's a proper UUID format
+	if uuidPart != "" && !isValidUUID(uuidPart) {
+		// If it looks like it should be a UUID but isn't valid, this might be garbled data
+		// Only accept if the text part is clearly readable
+		if len(text) < 10 {
+			return nil // Short text with invalid UUID is suspicious
+		}
+		// For longer readable text, we'll accept it but use a generated ID
+		uuidPart = ""
 	}
 
 	// Use UUID as bubble ID if available, otherwise use a hash of the text
