@@ -314,6 +314,12 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 					LogInfo("Blob %d (key='%s'): Found JSON in binary (len=%d): %s", i+1, blob.Key, len(jsonBytes), jsonPreview)
 					if jsonErr := json.Unmarshal(jsonBytes, &data); jsonErr == nil {
 						LogInfo("Blob %d (key='%s') had JSON embedded in binary data, extracted successfully", i+1, blob.Key)
+						// Log fields to understand structure
+						keys := make([]string, 0, len(data))
+						for k := range data {
+							keys = append(keys, k)
+						}
+						LogInfo("Blob %d extracted JSON fields: %v", i+1, keys)
 					} else {
 						jsonParseFailures++
 						if i < 10 {
@@ -349,14 +355,12 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			}
 		}
 
-		// Log available fields for first few entries
-		if i < 3 {
-			keys := make([]string, 0, len(data))
-			for k := range data {
-				keys = append(keys, k)
-			}
-			LogInfo("Blob %d (key='%s') parsed successfully. Available fields: %v", i+1, blob.Key, keys)
+		// Log available fields for all successfully parsed entries to understand structure
+		keys := make([]string, 0, len(data))
+		for k := range data {
+			keys = append(keys, k)
 		}
+		LogInfo("Blob %d (key='%s') parsed successfully. Available fields: %v", i+1, blob.Key, keys)
 
 		// Check if it's a bubble (has bubbleId or similar)
 		if _, ok := data["bubbleId"].(string); ok {
