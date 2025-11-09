@@ -85,17 +85,32 @@ func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
 	defer rows.Close()
 
 	var entries []BlobEntry
+	rowCount := 0
 	for rows.Next() {
+		rowCount++
 		var entry BlobEntry
 		var value sql.NullString
 		if err := rows.Scan(&entry.Key, &value); err != nil {
+			LogWarn("Failed to scan blob row %d: %v", rowCount, err)
 			continue
 		}
 		if value.Valid {
 			entry.Value = value.String
 			entries = append(entries, entry)
+			// Log first few entries for diagnostics
+			if rowCount <= 3 {
+				valuePreview := entry.Value
+				if len(valuePreview) > 200 {
+					valuePreview = valuePreview[:200] + "..."
+				}
+				LogInfo("Blob entry %d: key='%s', value_preview='%s'", rowCount, entry.Key, valuePreview)
+			}
+		} else {
+			LogWarn("Blob row %d has NULL value: key='%s'", rowCount, entry.Key)
 		}
 	}
+	
+	LogInfo("QueryBlobsTable: queried %d rows, returned %d valid entries", rowCount, len(entries))
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
@@ -165,17 +180,32 @@ func QueryMetaTable(db *sql.DB) ([]MetaEntry, error) {
 	defer rows.Close()
 
 	var entries []MetaEntry
+	rowCount := 0
 	for rows.Next() {
+		rowCount++
 		var entry MetaEntry
 		var value sql.NullString
 		if err := rows.Scan(&entry.Key, &value); err != nil {
+			LogWarn("Failed to scan meta row %d: %v", rowCount, err)
 			continue
 		}
 		if value.Valid {
 			entry.Value = value.String
 			entries = append(entries, entry)
+			// Log first few entries for diagnostics
+			if rowCount <= 3 {
+				valuePreview := entry.Value
+				if len(valuePreview) > 200 {
+					valuePreview = valuePreview[:200] + "..."
+				}
+				LogInfo("Meta entry %d: key='%s', value_preview='%s'", rowCount, entry.Key, valuePreview)
+			}
+		} else {
+			LogWarn("Meta row %d has NULL value: key='%s'", rowCount, entry.Key)
 		}
 	}
+	
+	LogInfo("QueryMetaTable: queried %d rows, returned %d valid entries", rowCount, len(entries))
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows iteration error: %w", err)
@@ -225,12 +255,30 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 	contexts := make(map[string][]*MessageContext)
 
 	// Process blobs - they may contain bubble data
-	for _, blob := range blobs {
+	jsonParseFailures := 0
+	for i, blob := range blobs {
 		// Try to parse as JSON and identify the type
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(blob.Value), &data); err != nil {
 			// Not JSON, skip
+			jsonParseFailures++
+			if i < 3 {
+				valuePreview := blob.Value
+				if len(valuePreview) > 100 {
+					valuePreview = valuePreview[:100] + "..."
+				}
+				LogWarn("Blob %d (key='%s') failed JSON parse: %v. Value preview: %s", i+1, blob.Key, err, valuePreview)
+			}
 			continue
+		}
+		
+		// Log available fields for first few entries
+		if i < 3 {
+			keys := make([]string, 0, len(data))
+			for k := range data {
+				keys = append(keys, k)
+			}
+			LogInfo("Blob %d (key='%s') parsed successfully. Available fields: %v", i+1, blob.Key, keys)
 		}
 
 		// Check if it's a bubble (has bubbleId or similar)
@@ -258,12 +306,34 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			composers = append(composers, composer)
 		}
 	}
+	
+	if jsonParseFailures > 0 {
+		LogWarn("Failed to parse %d/%d blobs as JSON", jsonParseFailures, len(blobs))
+	}
 
 	// Process meta - may contain context or additional metadata
-	for _, entry := range meta {
+	metaJsonParseFailures := 0
+	for i, entry := range meta {
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(entry.Value), &data); err != nil {
+			metaJsonParseFailures++
+			if i < 3 {
+				valuePreview := entry.Value
+				if len(valuePreview) > 100 {
+					valuePreview = valuePreview[:100] + "..."
+				}
+				LogWarn("Meta %d (key='%s') failed JSON parse: %v. Value preview: %s", i+1, entry.Key, err, valuePreview)
+			}
 			continue
+		}
+		
+		// Log available fields for first few entries
+		if i < 3 {
+			keys := make([]string, 0, len(data))
+			for k := range data {
+				keys = append(keys, k)
+			}
+			LogInfo("Meta %d (key='%s') parsed successfully. Available fields: %v", i+1, entry.Key, keys)
 		}
 
 		// Check if it's a message context
@@ -284,6 +354,13 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			}
 		}
 	}
+	
+	if metaJsonParseFailures > 0 {
+		LogWarn("Failed to parse %d/%d meta entries as JSON", metaJsonParseFailures, len(meta))
+	}
+	
+	LogInfo("LoadSessionFromStoreDB summary: %d blobs queried, %d meta queried, %d bubbles extracted, %d composers extracted, %d contexts extracted", 
+		len(blobs), len(meta), len(bubbles), len(composers), len(contexts))
 
 	return bubbles, composers, contexts, nil
 }
