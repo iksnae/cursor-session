@@ -39,6 +39,17 @@ func (bm *BubbleMap) Len() int {
 	return len(bm.bubbles)
 }
 
+// GetAll returns all bubbles in the map
+func (bm *BubbleMap) GetAll() []*RawBubble {
+	bm.mu.RLock()
+	defer bm.mu.RUnlock()
+	bubbles := make([]*RawBubble, 0, len(bm.bubbles))
+	for _, bubble := range bm.bubbles {
+		bubbles = append(bubbles, bubble)
+	}
+	return bubbles
+}
+
 // BuildBubbleMapFromChannel builds a bubble map from a channel
 func BuildBubbleMapFromChannel(bubbleChan <-chan *RawBubble) *BubbleMap {
 	bm := NewBubbleMap()

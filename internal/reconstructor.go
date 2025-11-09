@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 // ReconstructedConversation represents a fully reconstructed conversation
@@ -160,6 +161,14 @@ func ReconstructAsync(
 	}
 	LogInfo("Built context map with %d contexts across %d composers", contextCount, len(contextMap))
 
+	// If no composers but we have bubbles, create composers from bubbles
+	// This handles cursor-agent format where messages are stored as bubbles without explicit composers
+	if len(composers) == 0 && bubbleMap.Len() > 0 {
+		LogInfo("No composers found, creating composers from %d bubbles", bubbleMap.Len())
+		composers = createComposersFromBubbles(bubbleMap)
+		LogInfo("Created %d composer(s) from bubbles", len(composers))
+	}
+
 	// Reconstruct conversations
 	reconstructor := NewReconstructor(bubbleMap, contextMap)
 	return reconstructor.ReconstructAllConversations(composers)
@@ -228,4 +237,65 @@ func LoadDataAsyncFromBackend(backend StorageBackend) (<-chan *RawBubble, <-chan
 	}()
 
 	return bubbleChan, composerChan, contextChan, nil
+}
+
+// createComposersFromBubbles creates composers from bubbles when no explicit composers exist
+// This handles cursor-agent format where messages are stored as bubbles without composers
+func createComposersFromBubbles(bubbleMap *BubbleMap) []*RawComposer {
+	// Group bubbles by ChatID
+	bubblesByChatID := make(map[string][]*RawBubble)
+	allBubbles := bubbleMap.GetAll()
+	for _, bubble := range allBubbles {
+		chatID := bubble.ChatID
+		if chatID == "" {
+			// Use a default chatID if not set
+			chatID = "default-session"
+		}
+		bubblesByChatID[chatID] = append(bubblesByChatID[chatID], bubble)
+	}
+
+	var composers []*RawComposer
+	for chatID, bubbles := range bubblesByChatID {
+		// Sort bubbles by timestamp
+		sort.Slice(bubbles, func(i, j int) bool {
+			return bubbles[i].Timestamp < bubbles[j].Timestamp
+		})
+
+		// Create conversation headers from bubbles
+		headers := make([]ConversationHeader, 0, len(bubbles))
+		var createdAt, lastUpdatedAt int64
+		for _, bubble := range bubbles {
+			headers = append(headers, ConversationHeader{
+				BubbleID: bubble.BubbleID,
+				Type:     bubble.Type,
+			})
+			if createdAt == 0 || bubble.Timestamp < createdAt {
+				createdAt = bubble.Timestamp
+			}
+			if bubble.Timestamp > lastUpdatedAt {
+				lastUpdatedAt = bubble.Timestamp
+			}
+		}
+
+		// If timestamps are 0, use current time
+		if createdAt == 0 {
+			createdAt = time.Now().UnixMilli()
+		}
+		if lastUpdatedAt == 0 {
+			lastUpdatedAt = time.Now().UnixMilli()
+		}
+
+		composer := &RawComposer{
+			ComposerID:                  chatID,
+			Name:                        "", // Will be set from meta if available
+			FullConversationHeadersOnly: headers,
+			CreatedAt:                   createdAt,
+			LastUpdatedAt:               lastUpdatedAt,
+		}
+
+		composers = append(composers, composer)
+		LogInfo("Created composer %s from %d bubbles", chatID, len(headers))
+	}
+
+	return composers
 }
