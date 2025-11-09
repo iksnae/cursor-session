@@ -642,6 +642,20 @@ func extractSessionIDFromPath(path string) string {
 	return sessionID
 }
 
+// normalizeTimestamp converts a timestamp to milliseconds
+// If the timestamp is less than 1e12 (1 trillion), it's assumed to be in seconds and converted to milliseconds
+// Otherwise, it's assumed to already be in milliseconds
+func normalizeTimestamp(ts int64) int64 {
+	// Threshold: timestamps in milliseconds since epoch (2024) are > 1e12
+	// Timestamps in seconds since epoch are < 1e12
+	if ts < 1e12 {
+		// Likely in seconds, convert to milliseconds
+		return ts * 1000
+	}
+	// Already in milliseconds
+	return ts
+}
+
 func parseBubbleFromData(key string, data map[string]interface{}, sessionID string) (*RawBubble, error) {
 	bubble := &RawBubble{}
 
@@ -686,10 +700,11 @@ func parseBubbleFromData(key string, data map[string]interface{}, sessionID stri
 	}
 
 	// Extract timestamp
+	// Normalize to milliseconds (formatTimestamp expects milliseconds)
 	if ts, ok := data["timestamp"].(float64); ok {
-		bubble.Timestamp = int64(ts)
+		bubble.Timestamp = normalizeTimestamp(int64(ts))
 	} else if ts, ok := data["timestamp"].(int64); ok {
-		bubble.Timestamp = ts
+		bubble.Timestamp = normalizeTimestamp(ts)
 	}
 
 	// Extract type
@@ -896,13 +911,14 @@ func parseMessageToBubble(key, id, role string, data map[string]interface{}, ses
 	}
 
 	// Extract timestamp if available
+	// Normalize to milliseconds (formatTimestamp expects milliseconds)
 	if ts, ok := data["timestamp"].(float64); ok {
-		bubble.Timestamp = int64(ts)
+		bubble.Timestamp = normalizeTimestamp(int64(ts))
 	} else if ts, ok := data["timestamp"].(int64); ok {
-		bubble.Timestamp = ts
+		bubble.Timestamp = normalizeTimestamp(ts)
 	} else {
-		// Use current time if no timestamp
-		bubble.Timestamp = time.Now().Unix()
+		// Use current time if no timestamp (in milliseconds)
+		bubble.Timestamp = time.Now().UnixMilli()
 	}
 
 	return bubble, nil
