@@ -334,10 +334,19 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 					// This handles cursor-agent's user message format: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
 					if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
 						bubbles[bubble.BubbleID] = bubble
-						LogInfo("Blob %d parsed as text message format (user message): %s", i+1, bubble.Text)
+						LogInfo("Blob %d parsed as text message format (user message): bubbleId='%s', text='%s', chatId='%s'", i+1, bubble.BubbleID, bubble.Text, bubble.ChatID)
 						continue
+					} else {
+						// Log that we tried but failed to parse as text format
+						if i < 5 {
+							valuePreview := blob.Value
+							if len(valuePreview) > 100 {
+								valuePreview = valuePreview[:100] + "..."
+							}
+							LogInfo("Blob %d: tried text message format but didn't match pattern. Value preview: %s", i+1, valuePreview)
+						}
 					}
-					
+
 					// Not a text message format - the value might be a reference or in a different format
 					// Log detailed info for first few failures to understand the format
 					jsonParseFailures++
@@ -645,20 +654,30 @@ func parseBubbleFromData(key string, data map[string]interface{}, sessionID stri
 // Returns a RawBubble if the format matches, nil otherwise
 // Handles format like: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d" (may have control chars)
 func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
-	// Clean the value - remove control characters and trim whitespace
-	// The value might have control chars like \x05 at the start
-	cleaned := strings.TrimSpace(value)
+	// First, aggressively remove all control characters except newlines/tabs/carriage returns
+	// This handles cases where the value starts with control chars like \x05, \n, etc.
+	cleaned := strings.Map(func(r rune) rune {
+		// Keep printable characters, newlines, tabs, carriage returns, and space
+		if r >= 32 || r == '\n' || r == '\r' || r == '\t' {
+			return r
+		}
+		// Remove all other control characters
+		return -1
+	}, value)
 	
+	// Trim whitespace from both ends
+	cleaned = strings.TrimSpace(cleaned)
+
 	// Check if value matches pattern: text$uuid
 	// Example: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
 	dollarIdx := strings.Index(cleaned, "$")
 	if dollarIdx == -1 || dollarIdx == 0 {
 		return nil // No $ found or $ is at start
 	}
-	
+
 	// Extract text before $ and clean it
 	text := strings.TrimSpace(cleaned[:dollarIdx])
-	// Remove any remaining control characters
+	// Remove any remaining control characters (shouldn't be any after first pass, but be safe)
 	text = strings.Map(func(r rune) rune {
 		if r < 32 && r != '\n' && r != '\r' && r != '\t' {
 			return -1 // Remove control characters except newlines/tabs
@@ -666,11 +685,11 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 		return r
 	}, text)
 	text = strings.TrimSpace(text)
-	
+
 	if text == "" {
 		return nil // No text before $
 	}
-	
+
 	// Extract UUID after $ (optional, but useful for bubble ID)
 	uuidPart := ""
 	if dollarIdx+1 < len(cleaned) {
@@ -683,7 +702,7 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 			return r
 		}, uuidPart)
 	}
-	
+
 	// Use UUID as bubble ID if available, otherwise use a hash of the text
 	bubbleID := uuidPart
 	if bubbleID == "" {
@@ -694,7 +713,7 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 			bubbleID = key
 		}
 	}
-	
+
 	// Create user bubble (type=1 for user messages)
 	bubble := &RawBubble{
 		BubbleID:  bubbleID,
@@ -703,7 +722,7 @@ func parseTextMessageFormat(key, value, sessionID string) *RawBubble {
 		Text:      text,
 		Timestamp: time.Now().UnixMilli(), // Use current time if not available
 	}
-	
+
 	return bubble
 }
 
