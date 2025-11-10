@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -14,7 +15,11 @@ func ExtractTextFromBubble(bubble *RawBubble) (string, error) {
 
 	// Tier 1: Primary text field
 	if bubble.Text != "" {
-		textParts = append(textParts, bubble.Text)
+		// Check if text contains old format redacted reasoning and reformat it
+		text := reformatRedactedReasoning(bubble.Text)
+		if text != "" {
+			textParts = append(textParts, text)
+		}
 	}
 
 	// Tier 2: Parse richText JSON structure (even if text exists, richText may have additional info)
@@ -165,4 +170,60 @@ func extractFromRawJSON(jsonStr string) string {
 	}
 
 	return strings.TrimSpace(result.String())
+}
+
+// reformatRedactedReasoning detects and reformats old-style redacted reasoning
+// Old format: [Redacted Reasoning: hash]
+// New format: ```\n[Redacted Reasoning]\nhash\n``` (or decoded if possible)
+// If the text only contains redacted reasoning, it returns empty string (don't display)
+func reformatRedactedReasoning(text string) string {
+	// Pattern: [Redacted Reasoning: ...]
+	pattern := `\[Redacted Reasoning:\s*([^\]]+)\]`
+
+	// Check if the entire text is just redacted reasoning
+	matched, _ := regexp.MatchString(`^\s*`+pattern+`\s*$`, text)
+	if matched {
+		// Extract the hash/reasoning content
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(text)
+		if len(matches) > 1 {
+			encoded := strings.TrimSpace(matches[1])
+			// Try to decode the redacted reasoning
+			decoded, wasDecoded := decodeRedactedReasoning(encoded)
+			if wasDecoded {
+				return fmt.Sprintf("```\n[Redacted Reasoning - Decoded]\n%s\n```", decoded)
+			}
+			// Check if the message indicates encryption
+			if strings.Contains(decoded, "[Encrypted:") {
+				return fmt.Sprintf("```\n%s\n```", decoded)
+			}
+			// Format as code block with original encoded value
+			return fmt.Sprintf("```\n[Redacted Reasoning]\n%s\n```", encoded)
+		}
+		// If we can't extract, return empty (don't display)
+		return ""
+	}
+
+	// If text contains redacted reasoning but has other content, replace it with code block format
+	re := regexp.MustCompile(pattern)
+	text = re.ReplaceAllStringFunc(text, func(match string) string {
+		// Extract the content after the colon
+		parts := strings.SplitN(match, ":", 2)
+		if len(parts) == 2 {
+			encoded := strings.TrimSpace(strings.TrimSuffix(parts[1], "]"))
+			// Try to decode
+			decoded, wasDecoded := decodeRedactedReasoning(encoded)
+			if wasDecoded {
+				return fmt.Sprintf("```\n[Redacted Reasoning - Decoded]\n%s\n```", decoded)
+			}
+			// Check if the message indicates encryption
+			if strings.Contains(decoded, "[Encrypted:") {
+				return fmt.Sprintf("```\n%s\n```", decoded)
+			}
+			return fmt.Sprintf("```\n[Redacted Reasoning]\n%s\n```", encoded)
+		}
+		return match
+	})
+
+	return text
 }

@@ -31,12 +31,14 @@ curl -fsSL https://raw.githubusercontent.com/iksnae/cursor-session/main/install-
 ```
 
 That's it! The script will:
+
 - Detect your OS and architecture (macOS Intel/ARM, Linux amd64/arm64)
 - Download the latest pre-built binary
 - Install to `~/.local/bin`
 - Add to your PATH automatically
 
 **Verify installation:**
+
 ```bash
 cursor-session --version
 ```
@@ -51,6 +53,7 @@ If you prefer to download manually, visit the [Releases](https://github.com/iksn
 - **Linux (ARM64)**: `cursor-session-*-linux-arm64.tar.gz`
 
 Extract and move to your PATH:
+
 ```bash
 tar -xzf cursor-session-*.tar.gz
 mv cursor-session ~/.local/bin/
@@ -75,11 +78,13 @@ The script automatically builds, installs, and configures the tool. **No manual 
 ### Using Go Install
 
 **For stable releases:**
+
 ```bash
 go install github.com/iksnae/cursor-session@latest
 ```
 
 **For latest development version:**
+
 ```bash
 go install github.com/iksnae/cursor-session@main
 ```
@@ -127,48 +132,92 @@ cursor-session healthcheck
 cursor-session upgrade
 ```
 
+## Docker Development
+
+For isolated development that matches the GitHub Actions environment, use Docker:
+
+```bash
+# Set CURSOR_API_KEY (optional but recommended for cursor-agent)
+export CURSOR_API_KEY=your-api-key-here
+
+# Start development container with cursor-agent
+make docker-dev
+
+# Access interactive shell
+make docker-shell
+
+# Inside container: build and test
+make build
+make test
+./cursor-session healthcheck
+
+# Seed database with cursor-agent
+./cursor-session snoop --hello
+```
+
+See [Docker Development Guide](docs/DOCKER.md) for detailed instructions on:
+
+- Setting up CURSOR_API_KEY for cursor-agent authentication
+- Setting up cursor-agent in the container
+- Testing storage behavior in Ubuntu environment
+- Development workflow and troubleshooting
+
 ## Commands
 
 ### List Sessions
+
 ```bash
 cursor-session list [--clear-cache]
 ```
+
 Lists all available chat sessions with IDs, names, message counts, and creation dates.
 
 ### Show Session
+
 ```bash
 cursor-session show <session-id> [--limit <number>] [--since <timestamp>]
 ```
+
 Display messages from a specific session with optional filtering.
 
 ### Export Sessions
+
 ```bash
 cursor-session export [--format <format>] [--out <directory>] [--workspace <hash>] [--session-id <id>] [--clear-cache]
 ```
+
 Export sessions to various formats (jsonl, md, yaml, json). Filter by workspace or export a specific session.
 
 ### Health Check
+
 ```bash
 cursor-session healthcheck [--verbose]
 ```
+
 Verify that cursor-session can locate and access session data. Useful for debugging storage issues.
 
 ### Snoop (Path Detection)
+
 ```bash
 cursor-session snoop [--hello]
 ```
+
 Attempt to find the correct path to Cursor database files. Use `--hello` to seed the database with cursor-agent.
 
 ### Upgrade
+
 ```bash
 cursor-session upgrade
 ```
+
 Upgrade cursor-session to the latest released version from GitHub.
 
 ### Reconstruct (Debug)
+
 ```bash
 cursor-session reconstruct
 ```
+
 Reconstructs conversations and saves to intermediary JSON format. Primarily useful for debugging.
 
 For detailed usage information, see the [Usage Guide](docs/USAGE.md).
@@ -189,11 +238,13 @@ Releases are automatically created when git tags matching `v*` (e.g., `v1.0.0`, 
 - Release notes
 
 **Version Numbering:**
+
 - Follows [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH)
 - Use `@latest` with `go install` for stable releases
 - Use `@main` for the latest development version
 
 **Creating a Release:**
+
 ```bash
 # Tag a new version
 git tag v1.0.0
@@ -207,6 +258,7 @@ The GitHub Actions workflow will automatically build binaries and create a relea
 cursor-session supports two storage backends:
 
 1. **Desktop App Storage** (macOS/Linux)
+
    - Location: `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` (macOS)
    - Location: `~/.config/Cursor/User/globalStorage/state.vscdb` (Linux)
    - Extracts from Cursor IDE's globalStorage database
@@ -227,6 +279,7 @@ The tool automatically detects and uses the available storage backend. Desktop a
 ## Documentation
 
 - [Usage Guide](docs/USAGE.md) - Complete command reference
+- [Docker Development Guide](docs/DOCKER.md) - Docker setup and development workflow
 - [Implementation Details](docs/IMPLEMENTATION.md) - Technical implementation summary
 - [Technical Design](docs/TDD.md) - Architecture and design decisions
 - [Testing Guide](docs/TESTING.md) - Testing strategy and coverage

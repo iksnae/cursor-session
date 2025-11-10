@@ -134,3 +134,65 @@ func TestBuildBubbleMapFromChannel_EmptyChannel(t *testing.T) {
 		t.Errorf("Map should be empty, got %d bubbles", len(bm.bubbles))
 	}
 }
+
+func TestBubbleMap_Len(t *testing.T) {
+	bm := NewBubbleMap()
+
+	// Test empty map
+	if bm.Len() != 0 {
+		t.Errorf("Len() = %d, want 0", bm.Len())
+	}
+
+	// Add bubbles
+	bubble1 := CreateTestRawBubble("bubble1", "chat1", "Hello", 1)
+	bubble2 := CreateTestRawBubble("bubble2", "chat1", "Hi", 2)
+	bm.Set("bubble1", bubble1)
+	if bm.Len() != 1 {
+		t.Errorf("Len() = %d, want 1", bm.Len())
+	}
+
+	bm.Set("bubble2", bubble2)
+	if bm.Len() != 2 {
+		t.Errorf("Len() = %d, want 2", bm.Len())
+	}
+}
+
+func TestBubbleMap_GetAll(t *testing.T) {
+	bm := NewBubbleMap()
+
+	// Test empty map
+	all := bm.GetAll()
+	if len(all) != 0 {
+		t.Errorf("GetAll() returned %d bubbles, want 0", len(all))
+	}
+
+	// Add bubbles
+	bubble1 := CreateTestRawBubble("bubble1", "chat1", "Hello", 1)
+	bubble2 := CreateTestRawBubble("bubble2", "chat1", "Hi", 2)
+	bubble3 := CreateTestRawBubble("bubble3", "chat2", "Hey", 1)
+
+	bm.Set("bubble1", bubble1)
+	bm.Set("bubble2", bubble2)
+	bm.Set("bubble3", bubble3)
+
+	all = bm.GetAll()
+	if len(all) != 3 {
+		t.Errorf("GetAll() returned %d bubbles, want 3", len(all))
+	}
+
+	// Verify all bubbles are present
+	bubbleMap := make(map[string]*RawBubble)
+	for _, bubble := range all {
+		bubbleMap[bubble.BubbleID] = bubble
+	}
+
+	if bubbleMap["bubble1"] != bubble1 {
+		t.Error("bubble1 not in GetAll() result")
+	}
+	if bubbleMap["bubble2"] != bubble2 {
+		t.Error("bubble2 not in GetAll() result")
+	}
+	if bubbleMap["bubble3"] != bubble3 {
+		t.Error("bubble3 not in GetAll() result")
+	}
+}

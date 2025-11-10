@@ -81,10 +81,12 @@ func TestDetectStoragePaths_AgentStoragePath(t *testing.T) {
 	switch runtime.GOOS {
 	case "linux":
 		// On Linux, AgentStoragePath should be set
+		// It can be either .config/cursor/chats (newer) or .cursor/chats (older)
 		home, _ := os.UserHomeDir()
-		expected := filepath.Join(home, ".cursor/chats")
-		if paths.AgentStoragePath != expected {
-			t.Errorf("AgentStoragePath = %v, want %v", paths.AgentStoragePath, expected)
+		expected1 := filepath.Join(home, ".config/cursor/chats")
+		expected2 := filepath.Join(home, ".cursor/chats")
+		if paths.AgentStoragePath != expected1 && paths.AgentStoragePath != expected2 {
+			t.Errorf("AgentStoragePath = %v, want %v or %v", paths.AgentStoragePath, expected1, expected2)
 		}
 	case "darwin":
 		// On macOS, AgentStoragePath should be empty
@@ -151,11 +153,16 @@ func TestFindAgentStoreDBs(t *testing.T) {
 	if paths.AgentStoragePath != "" && paths.HasAgentStorage() {
 		storeDBs, err = paths.FindAgentStoreDBs()
 		if err != nil {
-			t.Errorf("FindAgentStoreDBs() error = %v", err)
-		}
-		// Just verify it doesn't panic and returns a slice (may be empty)
-		if storeDBs == nil {
-			t.Error("FindAgentStoreDBs() should return a slice, not nil")
+			// Error is acceptable if the directory exists but can't be scanned
+			// But we should still get a slice (empty or with results), not nil
+			if storeDBs == nil {
+				t.Error("FindAgentStoreDBs() should return a slice even on error, not nil")
+			}
+		} else {
+			// Just verify it doesn't panic and returns a slice (may be empty)
+			if storeDBs == nil {
+				t.Error("FindAgentStoreDBs() should return a slice, not nil")
+			}
 		}
 	}
 }

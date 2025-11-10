@@ -1,0 +1,71 @@
+# Development Dockerfile for cursor-session
+# Uses Ubuntu to match GitHub Actions environment
+FROM ubuntu:22.04
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    make \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Go 1.23
+ENV GO_VERSION=1.23.0
+# Detect architecture for Go
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then \
+    GO_ARCH=amd64; \
+    elif [ "$ARCH" = "arm64" ]; then \
+    GO_ARCH=arm64; \
+    else \
+    echo "Unsupported architecture: $ARCH"; \
+    exit 1; \
+    fi && \
+    curl -fsSL https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz -o /tmp/go.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz
+
+# Add Go to PATH
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/go"
+ENV GOCACHE="/go/cache"
+
+# Install Node.js and npm (for cursor-agent installation)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install cursor-agent CLI using official installation script
+# Note: The installer places cursor-agent at ~/.local/bin/cursor-agent
+RUN curl https://cursor.com/install -fsS | bash && \
+    # Add ~/.local/bin to PATH for verification (will be set permanently later)
+    export PATH="/root/.local/bin:${PATH}" && \
+    # Verify cursor-agent is installed
+    cursor-agent --version && \
+    # Ensure cursor-agent is in PATH (should be at ~/.local/bin/cursor-agent)
+    which cursor-agent || (echo "cursor-agent not found in PATH" && exit 1)
+
+# Create workspace directory
+WORKDIR /workspace
+
+# Ensure .local/bin exists for cursor-agent (installed during build)
+# Note: Storage directories will be created by cursor-agent when it runs
+# We don't pre-create them to avoid false positives in testing
+RUN mkdir -p /root/.local/bin
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set up environment variables for cursor-agent
+ENV HOME=/root
+ENV CURSOR_STORAGE_PATH=/root/.config/cursor/chats
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Default command
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/bin/bash"]
