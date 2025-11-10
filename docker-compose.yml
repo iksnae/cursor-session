@@ -1,0 +1,60 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cursor-session-dev
+    volumes:
+      # Mount source code for hot-reload
+      - .:/workspace
+      # Test data
+      - ./testdata:/workspace/testdata:ro
+    environment:
+      - HOME=/root
+      - CURSOR_STORAGE_PATH=/root/.config/cursor/chats
+      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
+      - GO_VERSION=1.23.0
+      - GOPATH=/go
+      - GOCACHE=/go/cache
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cursor-session-test
+    volumes:
+      - .:/workspace
+      - ./testdata:/workspace/testdata:ro
+    environment:
+      - HOME=/root
+      - CURSOR_STORAGE_PATH=/root/.config/cursor/chats
+      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
+      - GO_VERSION=1.23.0
+      - GOPATH=/go
+      - GOCACHE=/go/cache
+    working_dir: /workspace
+    command: go test ./... -v
+
+  build:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cursor-session-build
+    volumes:
+      - .:/workspace
+      - ./exports:/workspace/exports
+    environment:
+      - HOME=/root
+      - GO_VERSION=1.23.0
+      - GOPATH=/go
+      - GOCACHE=/go/cache
+    working_dir: /workspace
+    command: >
+      sh -c "
+        go build -buildvcs=false -ldflags '-X github.com/iksnae/cursor-session/cmd.version=dev -X github.com/iksnae/cursor-session/cmd.commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) -X github.com/iksnae/cursor-session/cmd.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)' -o cursor-session . &&
+        echo 'Build complete: cursor-session binary created'
+      "

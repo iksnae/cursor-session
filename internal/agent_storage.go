@@ -78,7 +78,9 @@ func QueryBlobsTable(db *sql.DB) ([]BlobEntry, error) {
 	if containsString(columns, "key") && containsString(columns, "value") {
 		query = "SELECT key, value FROM blobs WHERE value IS NOT NULL"
 	} else if containsString(columns, "id") && containsString(columns, "data") {
-		query = "SELECT id, data FROM blobs WHERE data IS NOT NULL"
+		// Use ORDER BY rowid to preserve insertion order (chronological order)
+		// This ensures messages are in the order they were created
+		query = "SELECT id, data FROM blobs WHERE data IS NOT NULL ORDER BY rowid"
 	} else if len(columns) >= 2 {
 		// Use first two columns
 		query = fmt.Sprintf("SELECT %s, %s FROM blobs WHERE %s IS NOT NULL", columns[0], columns[1], columns[1])
@@ -367,56 +369,128 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 							continue
 						}
 					} else {
-						// Not base64 and no JSON in binary - try parsing as text message format (text$uuid)
-						// This handles cursor-agent's user message format: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
-						if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
-							bubbles[bubble.BubbleID] = bubble
-							LogInfo("Blob %d parsed as text message format (user message): bubbleId='%s', text='%s', chatId='%s'", i+1, bubble.BubbleID, bubble.Text, bubble.ChatID)
-							continue
+						// Not base64 and no JSON in binary - try protobuf decode
+						if protobufFields, found := tryProtobufDecode(valueBytes); found {
+							// Initialize data map if it's nil
+							if data == nil {
+								data = make(map[string]interface{})
+							}
+							// Extract strings from protobuf fields
+							var extractedStrings []string
+							for key, value := range protobufFields {
+								if str, ok := value.(string); ok && isReadableText(str) {
+									extractedStrings = append(extractedStrings, str)
+									// Try to parse as JSON if it looks like JSON
+									if strings.HasPrefix(str, "{") || strings.HasPrefix(str, "[") {
+										var jsonData map[string]interface{}
+										if jsonErr := json.Unmarshal([]byte(str), &jsonData); jsonErr == nil {
+											// Merge JSON data into our data map
+											for k, v := range jsonData {
+												data[k] = v
+											}
+											LogInfo("Blob %d (key='%s'): Extracted JSON from protobuf field %s", i+1, blob.Key, key)
+										}
+									}
+								} else if nestedMap, ok := value.(map[string]interface{}); ok {
+									// Nested protobuf - extract strings from it
+									for nestedKey, nestedValue := range nestedMap {
+										if nestedStr, ok := nestedValue.(string); ok && isReadableText(nestedStr) {
+											extractedStrings = append(extractedStrings, nestedStr)
+											// Try to parse as JSON
+											if strings.HasPrefix(nestedStr, "{") || strings.HasPrefix(nestedStr, "[") {
+												var jsonData map[string]interface{}
+												if jsonErr := json.Unmarshal([]byte(nestedStr), &jsonData); jsonErr == nil {
+													// Merge into data map with nested key prefix
+													for k, v := range jsonData {
+														data[fmt.Sprintf("%s_%s", nestedKey, k)] = v
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+							if len(extractedStrings) > 0 {
+								previewCount := 3
+								if len(extractedStrings) < previewCount {
+									previewCount = len(extractedStrings)
+								}
+								LogInfo("Blob %d (key='%s'): Decoded protobuf, extracted %d string(s): %v", i+1, blob.Key, len(extractedStrings), extractedStrings[:previewCount])
+								// If we extracted JSON data, continue processing
+								if len(data) > 0 {
+									// Continue to bubble parsing below
+								} else {
+									// No JSON found in protobuf - try text message format
+									if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
+										bubbles[bubble.BubbleID] = bubble
+										LogInfo("Blob %d parsed as text message format (user message): bubbleId='%s', text='%s', chatId='%s'", i+1, bubble.BubbleID, bubble.Text, bubble.ChatID)
+										continue
+									}
+									jsonParseFailures++
+									continue
+								}
+							} else {
+								// Protobuf decoded but no readable strings found
+								jsonParseFailures++
+								if i < 5 {
+									LogWarn("Blob %d (key='%s'): Decoded as protobuf but no readable strings extracted", i+1, blob.Key)
+								}
+								continue
+							}
 						} else {
-							// Log that we tried but failed to parse as text format
-							// Only log if value appears to be readable (not binary garbage)
-							if i < 5 && isReadableText(blob.Value) {
-								valuePreview := blob.Value
-								if len(valuePreview) > 100 {
-									valuePreview = valuePreview[:100] + "..."
+							// Not protobuf - try parsing as text message format (text$uuid)
+							// This handles cursor-agent's user message format: "hello$027f8b2f-d09c-4a69-98b0-b53f0118605d"
+							if bubble := parseTextMessageFormat(blob.Key, blob.Value, sessionID); bubble != nil {
+								bubbles[bubble.BubbleID] = bubble
+								LogInfo("Blob %d parsed as text message format (user message): bubbleId='%s', text='%s', chatId='%s'", i+1, bubble.BubbleID, bubble.Text, bubble.ChatID)
+								continue
+							} else {
+								// Log that we tried but failed to parse as text format
+								// Only log if value appears to be readable (not binary garbage)
+								if i < 5 && isReadableText(blob.Value) {
+									valuePreview := blob.Value
+									if len(valuePreview) > 100 {
+										valuePreview = valuePreview[:100] + "..."
+									}
+									LogInfo("Blob %d: tried text message format but didn't match pattern. Value preview: %s", i+1, valuePreview)
 								}
-								LogInfo("Blob %d: tried text message format but didn't match pattern. Value preview: %s", i+1, valuePreview)
+								// Not a text message format - the value might be a reference or in a different format
+								// Log detailed info for first few failures to understand the format
+								jsonParseFailures++
+								if i < 10 {
+									valuePreview := blob.Value
+									fullValue := blob.Value
+									if len(valuePreview) > 200 {
+										valuePreview = valuePreview[:200] + "..."
+									}
+									LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
+									LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
+									LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
+									// Check if value looks like a path or reference
+									if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
+										LogInfo("  Value appears to be a path/reference, not JSON data")
+									}
+									// Check if there's a { in the value that might indicate JSON
+									if bytes.Contains(valueBytes, []byte("{")) {
+										LogInfo("  Value contains '{' but extraction failed - JSON might be incomplete or malformed")
+									}
+								}
+								continue
 							}
-							// Not a text message format - the value might be a reference or in a different format
-							// Log detailed info for first few failures to understand the format
-							jsonParseFailures++
-							if i < 10 {
-								valuePreview := blob.Value
-								fullValue := blob.Value
-								if len(valuePreview) > 200 {
-									valuePreview = valuePreview[:200] + "..."
-								}
-								LogWarn("Blob %d (key='%s', key_len=%d) failed JSON parse: %v", i+1, blob.Key, len(blob.Key), err)
-								LogInfo("  Value (len=%d): %s", len(fullValue), valuePreview)
-								LogInfo("  Key looks like hash: %v", isHashLike(blob.Key))
-								// Check if value looks like a path or reference
-								if strings.HasPrefix(fullValue, "/") || strings.Contains(fullValue, "$") {
-									LogInfo("  Value appears to be a path/reference, not JSON data")
-								}
-								// Check if there's a { in the value that might indicate JSON
-								if bytes.Contains(valueBytes, []byte("{")) {
-									LogInfo("  Value contains '{' but extraction failed - JSON might be incomplete or malformed")
-								}
-							}
-							continue
 						}
 					}
 				}
 			}
 		}
 
-		// Log available fields for all successfully parsed entries to understand structure
-		keys := make([]string, 0, len(data))
-		for k := range data {
-			keys = append(keys, k)
+		// Log available fields for debugging (only for first few blobs to reduce noise)
+		if i < 5 {
+			keys := make([]string, 0, len(data))
+			for k := range data {
+				keys = append(keys, k)
+			}
+			LogInfo("Blob %d (key='%s') parsed successfully. Available fields: %v", i+1, blob.Key, keys)
 		}
-		LogInfo("Blob %d (key='%s') parsed successfully. Available fields: %v", i+1, blob.Key, keys)
 
 		// Check if it's a bubble (has bubbleId)
 		if _, ok := data["bubbleId"].(string); ok {
@@ -472,6 +546,11 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 	if jsonParseFailures > 0 {
 		LogWarn("Failed to parse %d/%d blobs as JSON", jsonParseFailures, len(blobs))
 	}
+
+	// Extract session-level metadata from meta table (key="0" contains session metadata)
+	var sessionCreatedAt int64 = 0
+	var sessionAgentID string
+	var sessionName string
 
 	// Process meta - may contain context or additional metadata
 	metaJsonParseFailures := 0
@@ -562,6 +641,30 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 			LogInfo("Meta %d (key='%s') parsed successfully. Available fields: %v", i+1, entry.Key, keys)
 		}
 
+		// Extract session-level metadata from meta entry with key "0"
+		if entry.Key == "0" {
+			// Extract createdAt (session creation timestamp)
+			if ts, ok := data["createdAt"].(float64); ok {
+				sessionCreatedAt = int64(ts)
+				LogInfo("Meta: Extracted session createdAt: %d (from meta key='0')", sessionCreatedAt)
+			} else if ts, ok := data["createdAt"].(int64); ok {
+				sessionCreatedAt = ts
+				LogInfo("Meta: Extracted session createdAt: %d (from meta key='0')", sessionCreatedAt)
+			}
+
+			// Extract agentId (session ID)
+			if agentID, ok := data["agentId"].(string); ok {
+				sessionAgentID = agentID
+				LogInfo("Meta: Extracted session agentId: %s (from meta key='0')", sessionAgentID)
+			}
+
+			// Extract name (session name)
+			if name, ok := data["name"].(string); ok {
+				sessionName = name
+				LogInfo("Meta: Extracted session name: %s (from meta key='0')", sessionName)
+			}
+		}
+
 		// Check if it's a message context
 		if _, ok := data["contextId"].(string); ok {
 			context, err := parseContextFromData(entry.Key, data)
@@ -577,6 +680,31 @@ func LoadSessionFromStoreDB(dbPath string) (map[string]*RawBubble, []*RawCompose
 				if composerID != "" {
 					contexts[composerID] = append(contexts[composerID], context)
 				}
+			}
+		}
+	}
+
+	// Apply session createdAt to bubbles that don't have timestamps
+	if sessionCreatedAt > 0 {
+		for bubbleID, bubble := range bubbles {
+			if bubble.Timestamp == 0 {
+				bubble.Timestamp = sessionCreatedAt
+				bubbles[bubbleID] = bubble
+				LogInfo("Applied session createdAt (%d) to bubble %s (was missing timestamp)", sessionCreatedAt, bubbleID)
+			}
+		}
+	}
+
+	// Apply session metadata to composers
+	if sessionCreatedAt > 0 || sessionName != "" {
+		for i := range composers {
+			if sessionCreatedAt > 0 && composers[i].CreatedAt == 0 {
+				composers[i].CreatedAt = sessionCreatedAt
+				LogInfo("Applied session createdAt (%d) to composer %s", sessionCreatedAt, composers[i].ComposerID)
+			}
+			if sessionName != "" && composers[i].Name == "" {
+				composers[i].Name = sessionName
+				LogInfo("Applied session name (%s) to composer %s", sessionName, composers[i].ComposerID)
 			}
 		}
 	}
@@ -700,11 +828,16 @@ func parseBubbleFromData(key string, data map[string]interface{}, sessionID stri
 	}
 
 	// Extract timestamp
+	// NOTE: cursor-agent does NOT store timestamps in individual bubble blobs.
+	// Timestamps are only available at the session level in the meta table (key="0", field="createdAt").
+	// Individual bubbles inherit the session createdAt timestamp.
 	// Normalize to milliseconds (formatTimestamp expects milliseconds)
 	if ts, ok := data["timestamp"].(float64); ok {
 		bubble.Timestamp = normalizeTimestamp(int64(ts))
 	} else if ts, ok := data["timestamp"].(int64); ok {
 		bubble.Timestamp = normalizeTimestamp(ts)
+	} else {
+		bubble.Timestamp = 0
 	}
 
 	// Extract type
@@ -893,15 +1026,101 @@ func parseMessageToBubble(key, id, role string, data map[string]interface{}, ses
 		var textParts []string
 		for _, item := range content {
 			if itemMap, ok := item.(map[string]interface{}); ok {
-				// Check for text content
-				if text, ok := itemMap["text"].(string); ok {
+				itemType, _ := itemMap["type"].(string)
+
+				// Handle tool calls
+				if itemType == "tool_call" || itemType == "function_call" {
+					toolCallParts := []string{"[Tool Call]"}
+					if name, ok := itemMap["name"].(string); ok {
+						toolCallParts = append(toolCallParts, fmt.Sprintf("Tool: %s", name))
+					}
+					if toolCallID, ok := itemMap["tool_call_id"].(string); ok {
+						toolCallParts = append(toolCallParts, fmt.Sprintf("ID: %s", toolCallID))
+					}
+					if args, ok := itemMap["arguments"].(string); ok {
+						toolCallParts = append(toolCallParts, fmt.Sprintf("Arguments: %s", args))
+					} else if argsMap, ok := itemMap["arguments"].(map[string]interface{}); ok {
+						argsJSON, err := json.MarshalIndent(argsMap, "  ", "  ")
+						if err == nil {
+							toolCallParts = append(toolCallParts, fmt.Sprintf("Arguments:\n%s", string(argsJSON)))
+						}
+					}
+					textParts = append(textParts, strings.Join(toolCallParts, "\n"))
+				} else if itemType == "tool" {
+					// Tool response
+					toolParts := []string{"[Tool Response]"}
+					if name, ok := itemMap["name"].(string); ok {
+						toolParts = append(toolParts, fmt.Sprintf("Tool: %s", name))
+					}
+					if toolCallID, ok := itemMap["tool_call_id"].(string); ok {
+						toolParts = append(toolParts, fmt.Sprintf("Call ID: %s", toolCallID))
+					}
+					if content, ok := itemMap["content"].(string); ok {
+						toolParts = append(toolParts, fmt.Sprintf("Content: %s", content))
+					}
+					textParts = append(textParts, strings.Join(toolParts, "\n"))
+				} else if text, ok := itemMap["text"].(string); ok {
+					// Regular text content
 					textParts = append(textParts, text)
 				} else if data, ok := itemMap["data"].(string); ok {
 					// Some content items have "data" field (like redacted-reasoning)
-					// We can skip these or add them as metadata
-					// For now, skip redacted content
-					if itemType, _ := itemMap["type"].(string); itemType != "redacted-reasoning" {
+					if itemType == "redacted-reasoning" {
+						// Try to decode the redacted reasoning (may be base64url + protobuf encoded)
+						decoded, wasDecoded := decodeRedactedReasoning(data)
+						if wasDecoded {
+							// Successfully decoded - show the actual reasoning content
+							textParts = append(textParts, fmt.Sprintf("```\n[Redacted Reasoning - Decoded]\n%s\n```", decoded))
+						} else if strings.Contains(decoded, "[Encrypted:") {
+							// Encrypted content - show encryption message
+							textParts = append(textParts, fmt.Sprintf("```\n%s\n```", decoded))
+						} else {
+							// Could not decode - show as-is in code block
+							textParts = append(textParts, fmt.Sprintf("```\n[Redacted Reasoning]\n%s\n```", data))
+						}
+					} else {
 						textParts = append(textParts, data)
+					}
+				} else {
+					// Unknown content type - try to extract any readable fields
+					var unknownParts []string
+					if itemType != "" {
+						unknownParts = append(unknownParts, fmt.Sprintf("[%s]", itemType))
+					}
+					// Try to extract all common fields
+					if name, ok := itemMap["name"].(string); ok && name != "" {
+						unknownParts = append(unknownParts, fmt.Sprintf("Name: %s", name))
+					}
+					if id, ok := itemMap["id"].(string); ok && id != "" {
+						unknownParts = append(unknownParts, fmt.Sprintf("ID: %s", id))
+					}
+					if toolCallID, ok := itemMap["tool_call_id"].(string); ok && toolCallID != "" {
+						unknownParts = append(unknownParts, fmt.Sprintf("Tool Call ID: %s", toolCallID))
+					}
+					if content, ok := itemMap["content"].(string); ok && content != "" {
+						// Limit content length for readability
+						contentPreview := content
+						if len(contentPreview) > 500 {
+							contentPreview = contentPreview[:500] + "..."
+						}
+						unknownParts = append(unknownParts, fmt.Sprintf("Content: %s", contentPreview))
+					}
+					if args, ok := itemMap["arguments"].(string); ok && args != "" {
+						unknownParts = append(unknownParts, fmt.Sprintf("Arguments: %s", args))
+					} else if argsMap, ok := itemMap["arguments"].(map[string]interface{}); ok {
+						argsJSON, err := json.MarshalIndent(argsMap, "  ", "  ")
+						if err == nil {
+							argsStr := string(argsJSON)
+							if len(argsStr) > 500 {
+								argsStr = argsStr[:500] + "..."
+							}
+							unknownParts = append(unknownParts, fmt.Sprintf("Arguments:\n%s", argsStr))
+						}
+					}
+					// If we extracted any fields, use them; otherwise just note the type
+					if len(unknownParts) > 1 || (len(unknownParts) == 1 && !strings.Contains(unknownParts[0], "content]")) {
+						textParts = append(textParts, strings.Join(unknownParts, "\n"))
+					} else if len(unknownParts) == 1 {
+						textParts = append(textParts, unknownParts[0])
 					}
 				}
 			}
@@ -912,14 +1131,17 @@ func parseMessageToBubble(key, id, role string, data map[string]interface{}, ses
 	}
 
 	// Extract timestamp if available
+	// NOTE: cursor-agent does NOT store timestamps in individual message blobs.
+	// Timestamps are only available at the session level in the meta table (key="0", field="createdAt").
+	// Individual messages inherit the session createdAt timestamp.
 	// Normalize to milliseconds (formatTimestamp expects milliseconds)
 	if ts, ok := data["timestamp"].(float64); ok {
 		bubble.Timestamp = normalizeTimestamp(int64(ts))
 	} else if ts, ok := data["timestamp"].(int64); ok {
 		bubble.Timestamp = normalizeTimestamp(ts)
 	} else {
-		// Use current time if no timestamp (in milliseconds)
-		bubble.Timestamp = time.Now().UnixMilli()
+		// Leave timestamp as 0 - will be filled from session createdAt in meta table
+		bubble.Timestamp = 0
 	}
 
 	return bubble, nil

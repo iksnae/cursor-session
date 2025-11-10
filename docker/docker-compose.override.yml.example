@@ -1,0 +1,30 @@
+# Example docker-compose override file
+# Copy this to docker-compose.override.yml to customize your local setup
+# docker-compose.override.yml is automatically loaded by docker-compose
+
+version: '3.8'
+
+services:
+  dev:
+    # Override environment variables
+    environment:
+      - CURSOR_API_KEY=${CURSOR_API_KEY}
+      # Add custom environment variables here
+
+    # Override volumes if needed
+    # volumes:
+    #   - ./custom-data:/workspace/custom-data
+
+    # Override command
+    # command: /bin/bash -c "tail -f /dev/null"
+
+  test:
+    # Customize test environment
+    environment:
+      - CURSOR_API_KEY=${CURSOR_API_KEY}
+    # Add test-specific overrides here
+
+  build:
+    # Customize build environment
+    # volumes:
+    #   - ./build-output:/workspace/build-output

@@ -104,6 +104,34 @@ func extractTextFromChildrenInterface(children []interface{}) string {
 					text += "\n```\n" + codeText + "\n```\n"
 				}
 			}
+		} else if childType == "redacted_reasoning" || childType == "redacted-reasoning" {
+			// Extract redacted reasoning and format in code block
+			var reasoningText string
+			if childChildren, ok := childMap["children"].([]interface{}); ok {
+				reasoningText = extractTextFromChildrenInterface(childChildren)
+			}
+			if reasoningText == "" {
+				// Try to get from content or data fields
+				if content, ok := childMap["content"].(string); ok {
+					reasoningText = content
+				} else if data, ok := childMap["data"].(string); ok {
+					reasoningText = data
+				}
+			}
+			if reasoningText != "" {
+				// Try to decode the redacted reasoning (may be base64url + protobuf encoded)
+				decoded, wasDecoded := decodeRedactedReasoning(reasoningText)
+				if wasDecoded {
+					// Successfully decoded - show the actual reasoning content
+					text += fmt.Sprintf("\n```\n[Redacted Reasoning - Decoded]\n%s\n```\n", decoded)
+				} else if strings.Contains(decoded, "[Encrypted:") {
+					// Encrypted content - show encryption message
+					text += fmt.Sprintf("\n```\n%s\n```\n", decoded)
+				} else {
+					// Could not decode - show as-is in code block
+					text += fmt.Sprintf("\n```\n[Redacted Reasoning]\n%s\n```\n", reasoningText)
+				}
+			}
 		} else {
 			// Recursively process children
 			if childChildren, ok := childMap["children"].([]interface{}); ok {
@@ -135,6 +163,31 @@ func extractTextFromNode(node RichTextNode) string {
 		thinkingText := extractTextFromChildren(node.Children)
 		if thinkingText != "" {
 			text += fmt.Sprintf("\n[%s]\n%s\n", node.Type, thinkingText)
+		}
+	case "redacted_reasoning", "redacted-reasoning":
+		// Extract redacted reasoning and format in code block
+		reasoningText := extractTextFromChildren(node.Children)
+		if reasoningText == "" {
+			// Try to get from content or value fields
+			if node.Content != "" {
+				reasoningText = node.Content
+			} else if node.Value != "" {
+				reasoningText = node.Value
+			}
+		}
+		if reasoningText != "" {
+			// Try to decode the redacted reasoning (may be base64url + protobuf encoded)
+			decoded, wasDecoded := decodeRedactedReasoning(reasoningText)
+			if wasDecoded {
+				// Successfully decoded - show the actual reasoning content
+				text += fmt.Sprintf("\n```\n[Redacted Reasoning - Decoded]\n%s\n```\n", decoded)
+			} else if strings.Contains(decoded, "[Encrypted:") {
+				// Encrypted content - show encryption message
+				text += fmt.Sprintf("\n```\n%s\n```\n", decoded)
+			} else {
+				// Could not decode - show as-is in code block
+				text += fmt.Sprintf("\n```\n[Redacted Reasoning]\n%s\n```\n", reasoningText)
+			}
 		}
 	default:
 		// For unknown types, try to extract any text content from various fields

@@ -30,7 +30,7 @@ func (e *MarkdownExporter) Export(session *internal.Session, w io.Writer) error 
 	_, _ = fmt.Fprintf(w, "## Messages\n\n")
 
 	// Messages
-	for _, msg := range session.Messages {
+	for i, msg := range session.Messages {
 		timestamp := ""
 		if msg.Timestamp != "" {
 			timestamp = fmt.Sprintf(" (%s)", msg.Timestamp)
@@ -40,6 +40,11 @@ func (e *MarkdownExporter) Export(session *internal.Session, w io.Writer) error 
 		content := escapeMarkdown(msg.Content)
 
 		_, _ = fmt.Fprintf(w, "**%s:**%s\n\n%s\n\n", msg.Actor, timestamp, content)
+
+		// Add horizontal rule after each message (except the last one)
+		if i < len(session.Messages)-1 {
+			_, _ = fmt.Fprintf(w, "---\n\n")
+		}
 	}
 
 	return nil
