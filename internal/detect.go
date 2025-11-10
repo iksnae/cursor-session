@@ -1,11 +1,14 @@
 package internal
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	_ "modernc.org/sqlite"
 )
 
 // StoragePaths holds the detected paths for Cursor storage
@@ -208,7 +211,7 @@ func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
 		return []string{}, nil
 	}
 
-	var storeDBs []string
+	storeDBs := make([]string, 0) // Initialize as empty slice, not nil
 	var dirsScanned int
 	var dirsWithFiles int
 
@@ -239,7 +242,8 @@ func (sp StoragePaths) FindAgentStoreDBs() ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan agent storage directory: %w", err)
+		// Return empty slice instead of nil on error to maintain consistent return type
+		return []string{}, fmt.Errorf("failed to scan agent storage directory: %w", err)
 	}
 
 	// Log diagnostic information in verbose mode
@@ -368,7 +372,8 @@ func copyFile(src, dst string) error {
 }
 
 // copyDatabaseWithWAL copies a database file along with its associated WAL and SHM files if they exist.
-// This ensures complete database data is copied, including uncommitted transactions in WAL files.
+// After copying, it checkpoints the WAL file to merge it into the main database, ensuring a consistent
+// and complete copy. This is important because SQLite in WAL mode stores recent transactions in the WAL file.
 func copyDatabaseWithWAL(srcDB, dstDB string) error {
 	// Copy the main database file
 	if err := copyFile(srcDB, dstDB); err != nil {
@@ -378,12 +383,14 @@ func copyDatabaseWithWAL(srcDB, dstDB string) error {
 	// Check for and copy WAL file if it exists
 	srcWAL := srcDB + "-wal"
 	dstWAL := dstDB + "-wal"
+	hasWAL := false
 	if _, err := os.Stat(srcWAL); err == nil {
 		if err := copyFile(srcWAL, dstWAL); err != nil {
 			// Log warning but don't fail - WAL file copy is best effort
 			LogWarn("Failed to copy WAL file %s: %v", srcWAL, err)
 		} else {
 			LogInfo("Copied WAL file: %s", dstWAL)
+			hasWAL = true
 		}
 	}
 
@@ -398,6 +405,51 @@ func copyDatabaseWithWAL(srcDB, dstDB string) error {
 			LogInfo("Copied SHM file: %s", dstSHM)
 		}
 	}
+
+	// If we copied a WAL file, checkpoint it to merge into the main database
+	// This ensures the copied database is complete and consistent
+	if hasWAL {
+		if err := checkpointWAL(dstDB); err != nil {
+			// Log warning but don't fail - checkpoint is best effort
+			// The database should still be readable, just might be missing recent WAL transactions
+			LogWarn("Failed to checkpoint WAL for copied database %s: %v (database may be incomplete)", dstDB, err)
+		} else {
+			LogInfo("Checkpointed WAL file for copied database: %s", dstDB)
+		}
+	}
+
+	return nil
+}
+
+// checkpointWAL checkpoints a SQLite database's WAL file, merging it into the main database.
+// This is necessary when copying databases in WAL mode to ensure all data is in the main file.
+func checkpointWAL(dbPath string) error {
+	// Open the copied database in read-write mode to checkpoint
+	// Note: We use mode=rwc to create if needed, but the file should already exist
+	db, err := sql.Open("sqlite", dbPath+"?mode=rwc")
+	if err != nil {
+		return fmt.Errorf("failed to open database for checkpoint: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Test connection
+	if err := db.Ping(); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
+	}
+
+	// Run PRAGMA wal_checkpoint(TRUNCATE) to checkpoint and truncate the WAL file
+	// This merges all WAL transactions into the main database and removes the WAL file
+	// Note: PRAGMA wal_checkpoint returns three integers (checkpointed, pages_written, pages_checkpointed)
+	// but the modernc.org/sqlite driver may not support returning values from PRAGMA statements.
+	// We'll execute it and check for errors.
+	_, err = db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	if err != nil {
+		return fmt.Errorf("failed to checkpoint WAL: %w", err)
+	}
+
+	// The checkpoint should have merged the WAL into the main database
+	// The WAL file will be truncated (emptied) but may still exist
+	LogInfo("WAL checkpoint completed for %s", dbPath)
 
 	return nil
 }

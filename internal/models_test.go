@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestParseRawBubble(t *testing.T) {
@@ -281,5 +283,130 @@ func TestParseRawComposer_InvalidKey(t *testing.T) {
 				t.Errorf("ParseRawComposer() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestRawBubble_GetTimestamp(t *testing.T) {
+	tests := []struct {
+		name      string
+		timestamp int64
+		want      time.Time
+	}{
+		{"zero timestamp", 0, time.Unix(0, 0)},
+		{"valid timestamp", 1000000, time.Unix(0, 1000000*int64(time.Millisecond))},
+		{"large timestamp", 1762780597280, time.Unix(0, 1762780597280*int64(time.Millisecond))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bubble := &RawBubble{Timestamp: tt.timestamp}
+			got := bubble.GetTimestamp()
+			if !got.Equal(tt.want) {
+				t.Errorf("GetTimestamp() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRawComposer_GetCreatedAt(t *testing.T) {
+	tests := []struct {
+		name      string
+		createdAt int64
+		want      time.Time
+	}{
+		{"zero timestamp", 0, time.Time{}},
+		{"valid timestamp", 1000000, time.Unix(0, 1000000*int64(time.Millisecond))},
+		{"large timestamp", 1762780597280, time.Unix(0, 1762780597280*int64(time.Millisecond))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			composer := &RawComposer{CreatedAt: tt.createdAt}
+			got := composer.GetCreatedAt()
+			if !got.Equal(tt.want) {
+				t.Errorf("GetCreatedAt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRawComposer_GetLastUpdatedAt(t *testing.T) {
+	tests := []struct {
+		name          string
+		createdAt     int64
+		lastUpdatedAt int64
+		want          time.Time
+	}{
+		{"zero timestamps", 0, 0, time.Time{}},
+		{"only createdAt", 1000000, 0, time.Unix(0, 1000000*int64(time.Millisecond))},
+		{"both timestamps", 1000000, 2000000, time.Unix(0, 2000000*int64(time.Millisecond))},
+		{"large timestamps", 1762780597280, 1762780600000, time.Unix(0, 1762780600000*int64(time.Millisecond))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			composer := &RawComposer{
+				CreatedAt:     tt.createdAt,
+				LastUpdatedAt: tt.lastUpdatedAt,
+			}
+			got := composer.GetLastUpdatedAt()
+			if !got.Equal(tt.want) {
+				t.Errorf("GetLastUpdatedAt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRawComposer_ToIntermediaryJSON(t *testing.T) {
+	composer := &RawComposer{
+		ComposerID: "composer1",
+		Name:       "Test",
+		CreatedAt:  1000000,
+	}
+
+	jsonBytes, err := composer.ToIntermediaryJSON()
+	if err != nil {
+		t.Fatalf("ToIntermediaryJSON() error = %v", err)
+	}
+
+	if len(jsonBytes) == 0 {
+		t.Error("ToIntermediaryJSON() returned empty bytes")
+	}
+
+	// Verify it's valid JSON
+	var decoded RawComposer
+	if err := json.Unmarshal(jsonBytes, &decoded); err != nil {
+		t.Errorf("ToIntermediaryJSON() returned invalid JSON: %v", err)
+	}
+
+	if decoded.ComposerID != composer.ComposerID {
+		t.Errorf("ToIntermediaryJSON() ComposerID = %q, want %q", decoded.ComposerID, composer.ComposerID)
+	}
+}
+
+func TestRawComposer_ToIntermediaryYAML(t *testing.T) {
+	composer := &RawComposer{
+		ComposerID: "composer1",
+		Name:       "Test",
+		CreatedAt:  1000000,
+	}
+
+	yamlBytes, err := composer.ToIntermediaryYAML()
+	if err != nil {
+		t.Fatalf("ToIntermediaryYAML() error = %v", err)
+	}
+
+	if len(yamlBytes) == 0 {
+		t.Error("ToIntermediaryYAML() returned empty bytes")
+	}
+
+	// Verify it's valid JSON (since ToIntermediaryYAML currently returns JSON)
+	var decoded RawComposer
+	if err := json.Unmarshal(yamlBytes, &decoded); err != nil {
+		t.Errorf("ToIntermediaryYAML() returned invalid JSON: %v", err)
+	}
+
+	if decoded.ComposerID != composer.ComposerID {
+		t.Errorf("ToIntermediaryYAML() ComposerID = %q, want %q", decoded.ComposerID, composer.ComposerID)
 	}
 }

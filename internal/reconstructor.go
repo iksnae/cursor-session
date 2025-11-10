@@ -60,6 +60,8 @@ func (r *Reconstructor) ReconstructConversation(composer *RawComposer) (*Reconst
 	}
 
 	// Reconstruct messages from headers
+	// NOTE: FullConversationHeadersOnly array is already in the correct chronological order.
+	// We preserve this order and only sort by timestamp if timestamps differ.
 	for _, header := range composer.FullConversationHeadersOnly {
 		bubble, ok := r.bubbleMap.Get(header.BubbleID)
 		if !ok {
@@ -96,10 +98,28 @@ func (r *Reconstructor) ReconstructConversation(composer *RawComposer) (*Reconst
 		conv.Messages = append(conv.Messages, msg)
 	}
 
-	// Sort messages by timestamp
-	sort.Slice(conv.Messages, func(i, j int) bool {
-		return conv.Messages[i].Timestamp < conv.Messages[j].Timestamp
-	})
+	// Sort messages by timestamp ONLY if timestamps differ
+	// cursor-agent doesn't store per-message timestamps, so all messages have the same
+	// session createdAt. In this case, we preserve the order from FullConversationHeadersOnly.
+	hasDifferentTimestamps := false
+	if len(conv.Messages) > 1 {
+		firstTimestamp := conv.Messages[0].Timestamp
+		for i := 1; i < len(conv.Messages); i++ {
+			if conv.Messages[i].Timestamp != firstTimestamp {
+				hasDifferentTimestamps = true
+				break
+			}
+		}
+	}
+
+	if hasDifferentTimestamps {
+		// Timestamps differ - sort by timestamp to ensure chronological order
+		sort.Slice(conv.Messages, func(i, j int) bool {
+			return conv.Messages[i].Timestamp < conv.Messages[j].Timestamp
+		})
+	}
+	// If all timestamps are the same, preserve order from FullConversationHeadersOnly array
+	// This is the correct order for cursor-agent sessions
 
 	return conv, nil
 }
@@ -194,11 +214,16 @@ func LoadDataAsyncFromBackend(backend StorageBackend) (<-chan *RawBubble, <-chan
 		defer close(bubbleChan)
 		bubbles, err := backend.LoadBubbles()
 		if err != nil {
+			LogWarn("Failed to load bubbles: %v", err)
 			return
 		}
+		LogInfo("Loading %d bubbles into channel", len(bubbles))
 		for _, bubble := range bubbles {
-			bubbleChan <- bubble
+			if bubble != nil {
+				bubbleChan <- bubble
+			}
 		}
+		LogInfo("Finished sending %d bubbles to channel", len(bubbles))
 	}()
 
 	// Load composers
@@ -256,10 +281,31 @@ func createComposersFromBubbles(bubbleMap *BubbleMap) []*RawComposer {
 
 	var composers []*RawComposer
 	for chatID, bubbles := range bubblesByChatID {
-		// Sort bubbles by timestamp
-		sort.Slice(bubbles, func(i, j int) bool {
-			return bubbles[i].Timestamp < bubbles[j].Timestamp
-		})
+		// NOTE: cursor-agent doesn't store per-message timestamps, so all bubbles have the same
+		// session createdAt. We cannot sort by timestamp. Instead, we preserve the order from
+		// the database query (which reflects insertion order). The database query should use
+		// ORDER BY rowid to ensure consistent ordering, but even without it, SQLite typically
+		// returns rows in insertion order.
+		//
+		// Only sort by timestamp if timestamps actually differ (shouldn't happen for cursor-agent)
+		hasDifferentTimestamps := false
+		if len(bubbles) > 1 {
+			firstTimestamp := bubbles[0].Timestamp
+			for i := 1; i < len(bubbles); i++ {
+				if bubbles[i].Timestamp != firstTimestamp {
+					hasDifferentTimestamps = true
+					break
+				}
+			}
+		}
+
+		if hasDifferentTimestamps {
+			// Timestamps differ - sort by timestamp
+			sort.Slice(bubbles, func(i, j int) bool {
+				return bubbles[i].Timestamp < bubbles[j].Timestamp
+			})
+		}
+		// Otherwise, preserve the order from database (insertion order)
 
 		// Create conversation headers from bubbles
 		headers := make([]ConversationHeader, 0, len(bubbles))

@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -26,10 +27,30 @@ func (n *Normalizer) NormalizeConversation(conv *ReconstructedConversation, work
 	// Use composerId as the session ID (the real session identifier from Cursor)
 	sessionID := conv.ComposerID
 
-	// Convert messages
+	// Convert messages and ensure they're sorted by timestamp
+	// Create a slice with indices to sort by timestamp while preserving original order for ties
+	type msgWithIndex struct {
+		msg   ReconstructedMessage
+		index int
+	}
+	msgsWithIndex := make([]msgWithIndex, len(conv.Messages))
+	for i, msg := range conv.Messages {
+		msgsWithIndex[i] = msgWithIndex{msg: msg, index: i}
+	}
+
+	// Sort by timestamp, using index as tiebreaker to preserve original order
+	sort.Slice(msgsWithIndex, func(i, j int) bool {
+		if msgsWithIndex[i].msg.Timestamp != msgsWithIndex[j].msg.Timestamp {
+			return msgsWithIndex[i].msg.Timestamp < msgsWithIndex[j].msg.Timestamp
+		}
+		// If timestamps are equal, preserve original order
+		return msgsWithIndex[i].index < msgsWithIndex[j].index
+	})
+
+	// Convert to normalized messages
 	messages := make([]Message, 0, len(conv.Messages))
-	for _, msg := range conv.Messages {
-		normalizedMsg := n.normalizeMessage(msg)
+	for _, mwi := range msgsWithIndex {
+		normalizedMsg := n.normalizeMessage(mwi.msg)
 		messages = append(messages, normalizedMsg)
 	}
 
