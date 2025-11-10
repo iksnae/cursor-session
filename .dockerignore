@@ -1,0 +1,58 @@
+# Build artifacts
+cursor-session
+*.out
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+coverage*.out
+coverage.html
+*.test
+
+# Dependencies
+vendor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker files (don't copy into itself)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation build
+docs/_build/
+
+# Local environment files
+.env
+.env.local
+
+# Cursor storage (host system - don't copy)
+Library/Application Support/Cursor/
+.config/Cursor/
+.cursor/
+
+# Node modules (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Temporary files
+*.tmp
+*.log
+cursor-session
+tts_mcp_server.log
